@@ -209,15 +209,15 @@ class MultiRenderWindow(window.Window):
             return False
 
         # allocate colour attachments as render targets
-        self.leftDrawBuffer = color_attach_base + (maxAttach.value - 3)
-        self.rightDrawBuffer = color_attach_base + (maxAttach.value - 2)
-        self.screenDrawBuffer = color_attach_base + (maxAttach.value - 1)
+        self.leftDrawBuffer = color_attach_base + (maxAttach.value - 2)
+        self.rightDrawBuffer = color_attach_base + (maxAttach.value - 1)
+        #self.screenDrawBuffer = color_attach_base + (maxAttach.value - 1)
 
         # create C_UINT typed array for multi-buffer draw
-        colAttachList = [self.leftDrawBuffer, self.rightDrawBuffer]
-        self.bothDrawBuffers = ctypes.cast(
-            (ctypes.c_uint * len(colAttachList))(*colAttachList),
-            ctypes.POINTER(ctypes.c_uint))
+        #colAttachList = [self.leftDrawBuffer, self.rightDrawBuffer]
+        #self.bothDrawBuffers = ctypes.cast(
+         #   (ctypes.c_uint * len(colAttachList))(*colAttachList),
+          #  ctypes.POINTER(ctypes.c_uint))
 
         # get texture size of render target, some display modes need the render
         # target to be half the screen size (i.e. spanned window) since aspect
@@ -229,8 +229,8 @@ class MultiRenderWindow(window.Window):
             self.leftDrawBuffer, sizeFBO[0], sizeFBO[1])
         self.rightFBO, self.rightTexture, self.rightRender = setupFBO(self,
             self.rightDrawBuffer, sizeFBO[0], sizeFBO[1])
-        self.screenFBO, self.screenTexture, self.screenRender = setupFBO(self,
-            self.screenDrawBuffer, self._size[0], self._size[1])
+        #self.screenFBO, self.screenTexture, self.screenRender = setupFBO(self,
+        #    self.screenDrawBuffer, self._size[0], self._size[1])
 
         return True
 
