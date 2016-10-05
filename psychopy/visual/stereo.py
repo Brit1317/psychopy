@@ -8,13 +8,18 @@ code modified from visual.Window by PsychoPy contributers.
 import ctypes
 import sys
 import pyglet
-pyglet.options['debug_gl'] = True
+import numpy
+pyglet.options['debug_gl'] = False
 GL = pyglet.gl
 
 # PsychoPy imports
-from . import shaders as _shaders
+from . import shaders as _shaders1
 from . import window
+from .. import platform_specific
 from .. import logging
+from . import globalVars
+
+reportNDroppedFrames = 5  # stop raising warning after this
 
 class MultiRenderWindow(window.Window):
 
@@ -94,7 +99,7 @@ class MultiRenderWindow(window.Window):
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftFBO)
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
-    def _setupStereoFrag(self):
+    def _prepareFBOrender(self):
         """Bind and configure the stereo shader. This is overridden by shaders
         needing more options."""
         GL.glUseProgram(self._progStereoShader)
@@ -102,36 +107,6 @@ class MultiRenderWindow(window.Window):
             "leftEyeTexture"), 1)
         GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
             "rightEyeTexture"), 2)
-
-    def _startFBOrender(self, flipThisFrame):
-        """Render stereo render texture to target quad.
-        """
-        if flipThisFrame:
-            # bind the shader program and configure
-            self._setupStereoFrag()
-
-            # todo - handle bits support
-            #if self.bits != None:
-            #    self.bits._prepareFBOrender()
-
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-            GL.glDisable(GL.GL_BLEND)
-            stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
-            GL.glDisable(GL.GL_STENCIL_TEST)
-
-            # bind left and right eye images to textures
-            GL.glActiveTexture(GL.GL_TEXTURE1)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
-            GL.glActiveTexture(GL.GL_TEXTURE2)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
-
-            self._renderFBO() # draw quad
-            self._finishFBOrender()
-            self._afterFBOrender()
-
-            GL.glEnable(GL.GL_BLEND)
-
-            return stencilOn
 
     def _afterSetupGL(self):
         """After GL has been setup by the window, this function is called to
@@ -254,7 +229,6 @@ class MultiRenderWindow(window.Window):
         # get texture size of render target, some display modes need the render
         # target to be half the screen size (i.e. spanned window) since aspect
         # ratio needs to be maintained
-
         self.sizeFBO = self._getFBOSize()
 
         # create framebuffers for each eye
@@ -269,10 +243,10 @@ class MultiRenderWindow(window.Window):
 
     def flip(self, clearBuffer=True):
         """
-        Copy of window.Window.flip() class with some modifications to better
+        * Copy of window.Window.flip() method with some modifications to better
         utilize the stereo rendering pipeline without the risk of breaking
         existing experiments. useFBO is prohibitted by the stereo extension
-        and is not tested for or applied here.
+        and is not tested for or applied here. *
 
         Flip the front and back buffers after drawing everything for your
         frame. (This replaces the win.update() method, better reflecting what
@@ -288,22 +262,20 @@ class MultiRenderWindow(window.Window):
 
         flipThisFrame = self._startOfFlip()
         if flipThisFrame:
+            # call stereo rendering functions
+            self._stereoRender()
+
+            # render the screen FBO to the back buffer
             self._prepareFBOrender()
-            # need blit the frambuffer object to the actual back buffer
+
+            if self.bits != None:
+                self.bits._prepareFBOrender()
 
             # unbind the framebuffer as the render target
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
             GL.glDisable(GL.GL_BLEND)
             stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
             GL.glDisable(GL.GL_STENCIL_TEST)
-
-            #if self.bits != None:
-            #    self.bits._prepareFBOrender()
-
-            # call stereo rendering functions
-            self._startStereoRender()
-            self._finishStereoRender()
-            self._afterStereoRender()
 
             # before flipping need to copy the renderBuffer to the
             # frameBuffer
@@ -315,7 +287,6 @@ class MultiRenderWindow(window.Window):
 
             self._renderFBO()
 
-            GL.glEnable(GL.GL_BLEND)
             self._finishFBOrender()
 
         # call this before flip() whether FBO was used or not
@@ -350,18 +321,12 @@ class MultiRenderWindow(window.Window):
             else:
                 core.quit()  # we've unitialised pygame so quit
 
-        if self.useFBO:
-            if flipThisFrame:
-                # set rendering back to the framebuffer object
-                GL.glBindFramebufferEXT(
-                    GL.GL_FRAMEBUFFER_EXT, self.frameBuffer)
-                GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
-                GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
-                # set to no active rendering texture
-                GL.glActiveTexture(GL.GL_TEXTURE0)
-                GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-                if stencilOn:
-                    GL.glEnable(GL.GL_STENCIL_TEST)
+        if flipThisFrame:
+            # set to no active rendering texture
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+            if stencilOn:
+                GL.glEnable(GL.GL_STENCIL_TEST)
 
         # rescale, reposition, & rotate
         GL.glMatrixMode(GL.GL_MODELVIEW)
@@ -458,8 +423,7 @@ class MultiRenderWindow(window.Window):
         """
         if buffer == 'left':
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftFBO)
-            width, height = self._getFBOSize()
-            GL.glViewport(0, 0, width, height)
+            GL.glViewport(0, 0, self.size[0], self.size[1])
             GL.glMatrixMode(GL.GL_PROJECTION)
             GL.glLoadIdentity()
             GL.glOrtho(-1, 1, -1, 1, -1, 1)
@@ -468,8 +432,7 @@ class MultiRenderWindow(window.Window):
 
         elif buffer == 'right':
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.rightFBO)
-            width, height = self._getFBOSize()
-            GL.glViewport(0, 0, width, height)
+            GL.glViewport(0, 0, self.size[0], self.size[1])
             GL.glMatrixMode(GL.GL_PROJECTION)
             GL.glLoadIdentity()
             GL.glOrtho(-1, 1, -1, 1, -1, 1)
@@ -478,18 +441,14 @@ class MultiRenderWindow(window.Window):
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+    
+    def _finishFBOrender(self):
+        GL.glEnable(GL.GL_BLEND)
+        GL.glUseProgram(0)
 
-    def _startStereoRender(self):
+    def _stereoRender(self):
         """Override with code to configure and execute transfering stereo
         buffers to textures and blitting them to the back buffer."""
-        pass
-
-    def _finishStereoRender(self):
-        """Override with code to run after rendering stereo textures to the
-        back buffer."""
-        pass
-
-    def _afterStereoRender(self):
         pass
 
 """
@@ -499,93 +458,19 @@ quad-buffer enabled through the GL_STEREO extension, use the stereo=True
 option included in the vanilla Window class.
 """
 
-class LeftRightWindow(MultiRenderWindow):
-
-    """Create a display where left and right eye images are packed
-    horizontally in the same window. Some stereo hardware uses this format
-    to create 3D images. Your horizontal resolution will be halved using this
-    method.
-
-    NOTE: The left eye image always appears on the left side of thes screen,
-    there is no way of changing this (yet).
-    """
-
-    def __init__(self, *args, **kwargs):
-        MultiRenderWindow.__init__(self, *args, **kwargs)
-
-    def _compileStereoShader(self):
-        # use the regular FBO rendering shader
-        self._progStereoShader = self._progFBOtoFrame
-
-    def _renderFBO(self):
-        """This is disabled for this rendering mode. No custom warping yet."""
-        pass
-
-    def _startStereoRender(self, flipThisFrame):
-        if flipThisFrame:
-            # bind the shader program and configure
-            self._setupStereoFrag()
-
-            # we can use bits here since we are not doing anything to the colour
-            # channels
-            if self.bits != None:
-                self.bits._prepareFBOrender()
-
-            # set back buffer as rendering target
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-            GL.glDisable(GL.GL_BLEND)
-            stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
-            GL.glDisable(GL.GL_STENCIL_TEST)
-
-            # left texture on the right side of screen
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
-            GL.glColorMask(True, True, True, True)
-            GL.glBegin(GL.GL_QUADS)
-            GL.glTexCoord2f(0.0, 0.0)
-            GL.glVertex2f(-1.0, -1.0)
-            GL.glTexCoord2f(0.0, 1.0)
-            GL.glVertex2f(-1.0, 1.0)
-            GL.glTexCoord2f(1.0, 1.0)
-            GL.glVertex2f(0.0, 1.0)
-            GL.glTexCoord2f(1.0, 0.0)
-            GL.glVertex2f(0.0, -1.0)
-            GL.glEnd()
-
-            # right texture on the right side of screen
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
-            GL.glColorMask(True, True, True, True)
-            GL.glBegin(GL.GL_QUADS)
-            GL.glTexCoord2f(0.0, 0.0)
-            GL.glVertex2f(0.0, -1.0)
-            GL.glTexCoord2f(0.0, 1.0)
-            GL.glVertex2f(0.0, 1.0)
-            GL.glTexCoord2f(1.0, 1.0)
-            GL.glVertex2f(1.0, 1.0)
-            GL.glTexCoord2f(1.0, 0.0)
-            GL.glVertex2f(1.0, -1.0)
-            GL.glEnd()
-
-            GL.glEnable(GL.GL_BLEND)
-
-            return stencilOn
-
 class SpannedWindow(MultiRenderWindow):
 
     """Create a display where left and right eye images are packed horizontally
     preserving the aspect ratio of the image.
 
     This is intended to provide multi-monitor support for extended desktop modes
-    like TwinView and Xinerama. This is the perfered method for multi-display
-    stereo. However, this is only supported on Windows and Linux with the
-    correct drivers.
+    like Surround, TwinView, and Xinerama. This is the perfered method for 
+    multi-display stereo. However, this is only supported on Windows and Linux 
+    with the supported drivers and configuration. 
     """
 
     def __init__(self, *args, **kwargs):
         # custom flags
-        self._half_width = True
-
         MultiRenderWindow.__init__(self, *args, **kwargs)
 
     def _compileStereoShader(self):
@@ -593,80 +478,66 @@ class SpannedWindow(MultiRenderWindow):
         self._progStereoShader = self._progFBOtoFrame
 
     def _getFBOSize(self):
-        return int(self.size[0]/2.), int(self.size[1])
+        return numpy.array((int(self.size[0]/2.), int(self.size[1])), numpy.int)
+    
+    def _prepareStereoFBOrender(self):
+        GL.glUseProgram(self._progStereoShader)
+        #GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
+        #    "leftEyeTexture"), 1)
+        #GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
+        #    "rightEyeTexture"), 2)
 
-    def _startFBOrender(self, flipThisFrame):
-        if flipThisFrame:
-            # bind the shader program and configure
-            self._setupStereoFrag()
+    def _stereoRender(self):
+        # bind the shader program and configure
+        self._prepareStereoFBOrender()
 
-            # we can use bits here since we are not doing anything to the colour
-            # channels
-            if self.bits != None:
-                self.bits._prepareFBOrender()
+        # set screen FBO as rendering target
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.screenFBO)
+        GL.glDisable(GL.GL_BLEND)
+        stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
+        GL.glDisable(GL.GL_STENCIL_TEST)
 
-            # set back buffer as rendering target
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-            GL.glDisable(GL.GL_BLEND)
-            stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
-            GL.glDisable(GL.GL_STENCIL_TEST)
+        # set the viewport to span the whole screen area
+        GL.glViewport(0, 0, self.size[0], self.size[1])
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glLoadIdentity()
+        GL.glOrtho(-1, 1, -1, 1, -1, 1)
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
 
-            # set the viewport to span the whole screen
-            GL.glViewport(0, 0, self.size[0], self.size[1])
+        # blit left texture on the left side of screen
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
+        GL.glColorMask(True, True, True, True)
+        GL.glBegin(GL.GL_QUADS)
+        GL.glTexCoord2f(0.0, 0.0)
+        GL.glVertex2f(-1.0, -1.0)
+        GL.glTexCoord2f(0.0, 1.0)
+        GL.glVertex2f(-1.0, 1.0)
+        GL.glTexCoord2f(1.0, 1.0)
+        GL.glVertex2f(0.0, 1.0)
+        GL.glTexCoord2f(1.0, 0.0)
+        GL.glVertex2f(0.0, -1.0)
+        GL.glEnd()
 
-            # left texture on the right side of screen
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
-            GL.glColorMask(True, True, True, True)
-            GL.glBegin(GL.GL_QUADS)
-            GL.glTexCoord2f(0.0, 0.0)
-            GL.glVertex2f(-1.0, -1.0)
-            GL.glTexCoord2f(0.0, 1.0)
-            GL.glVertex2f(-1.0, 1.0)
-            GL.glTexCoord2f(1.0, 1.0)
-            GL.glVertex2f(0.0, 1.0)
-            GL.glTexCoord2f(1.0, 0.0)
-            GL.glVertex2f(0.0, -1.0)
-            GL.glEnd()
+        # blit right texture on the right side of screen
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
+        GL.glColorMask(True, True, True, True)
+        GL.glBegin(GL.GL_QUADS)
+        GL.glTexCoord2f(0.0, 0.0)
+        GL.glVertex2f(0.0, -1.0)
+        GL.glTexCoord2f(0.0, 1.0)
+        GL.glVertex2f(0.0, 1.0)
+        GL.glTexCoord2f(1.0, 1.0)
+        GL.glVertex2f(1.0, 1.0)
+        GL.glTexCoord2f(1.0, 0.0)
+        GL.glVertex2f(1.0, -1.0)
+        GL.glEnd()
 
-            # right texture on the right side of screen
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
-            GL.glColorMask(True, True, True, True)
-            GL.glBegin(GL.GL_QUADS)
-            GL.glTexCoord2f(0.0, 0.0)
-            GL.glVertex2f(0.0, -1.0)
-            GL.glTexCoord2f(0.0, 1.0)
-            GL.glVertex2f(0.0, 1.0)
-            GL.glTexCoord2f(1.0, 1.0)
-            GL.glVertex2f(1.0, 1.0)
-            GL.glTexCoord2f(1.0, 0.0)
-            GL.glVertex2f(1.0, -1.0)
-            GL.glEnd()
-
-            self._finishFBOrender()
-            self._afterFBOrender()
-
-            GL.glEnable(GL.GL_BLEND)
-
-            return stencilOn
-
-    def setBuffer(self, buffer='left', clear=False):
-        """
-        Similar to setBuffer in Window, but changes the active eye FBO
-        instead of the back quad-buffer. Buffers can be cleared individually
-        if needed.
-        """
-
-        if buffer == 'left':
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftFBO)
-        elif buffer == 'right':
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.rightFBO)
-
-        GL.glViewport(-(self.size[0]/4), 0, self.size[0], self.size[1])
-
-        if clear:
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        # enable blending and stencil
+        GL.glEnable(GL.GL_BLEND)
+        if stencilOn:
+            GL.glEnable(GL.GL_STENCIL_TEST)
 
 class PageFlipWindow(MultiRenderWindow):
 
@@ -794,4 +665,4 @@ class AnaglyphWindow(MultiRenderWindow):
             '''
 
         self._progStereoShader = _shaders.compileProgram(
-            _shader.vertSimple, fragShader)
+            _shaders.vertSimple, fragShader)
