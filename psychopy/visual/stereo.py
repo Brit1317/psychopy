@@ -13,7 +13,7 @@ pyglet.options['debug_gl'] = False
 GL = pyglet.gl
 
 # PsychoPy imports
-from . import shaders as _shaders1
+from . import shaders as _shaders
 from . import window
 from .. import platform_specific
 from .. import logging
@@ -62,6 +62,8 @@ class MultiRenderWindow(window.Window):
     """
 
     def __init__(self, *args, **kwargs):
+
+        self._renderTarget = 0
         # check for troublesome window settings
         if 'stereo' in kwargs:
             logging.warning("Requesting a quad-buffered stereo window is not "
@@ -76,17 +78,12 @@ class MultiRenderWindow(window.Window):
                 )
 
             kwargs['useFBO'] = False
-
+        
+        self._size = kwargs['size']
         window.Window.__init__(self, *args, **kwargs)
 
     def getReservedColorAttachments(self):
         return([self.colorAttachmentLeft, self.colorAttachmentRight])
-
-    def _afterTextureDraw(self):
-        """
-        Call after the texture containing the stereo frame has been drawn.
-        """
-        GL.glDisable(GL.GL_TEXTURE_2D)
 
     def _endOfFlip(self, clearBuffer):
         """
@@ -103,10 +100,6 @@ class MultiRenderWindow(window.Window):
         """Bind and configure the stereo shader. This is overridden by shaders
         needing more options."""
         GL.glUseProgram(self._progStereoShader)
-        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-            "leftEyeTexture"), 1)
-        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-            "rightEyeTexture"), 2)
 
     def _afterSetupGL(self):
         """After GL has been setup by the window, this function is called to
@@ -126,12 +119,12 @@ class MultiRenderWindow(window.Window):
     def _compileStereoShader(self):
         """Compile a stereo shader required for the given stereo mode, this is
         overridden by the inheriting class"""
-        pass
+        self._progStereoShader = self._progFBOtoFrame
 
     def _getFBOSize(self):
         """Some stereo modes need render targets with different size than
         the window. Override this method to supply a custom size."""
-        return self.size
+        return self._size
 
     def _setupStereoFBO(self):
         """Setup a Frame Buffer Objects to handle offscreen rendering of eye
@@ -229,15 +222,15 @@ class MultiRenderWindow(window.Window):
         # get texture size of render target, some display modes need the render
         # target to be half the screen size (i.e. spanned window) since aspect
         # ratio needs to be maintained
-        self.sizeFBO = self._getFBOSize()
+        sizeFBO = self._getFBOSize()
 
         # create framebuffers for each eye
         self.leftFBO, self.leftTexture, self.leftRender = setupFBO(self,
-            self.leftDrawBuffer, self.sizeFBO[0], self.sizeFBO[1])
+            self.leftDrawBuffer, sizeFBO[0], sizeFBO[1])
         self.rightFBO, self.rightTexture, self.rightRender = setupFBO(self,
-            self.rightDrawBuffer, self.sizeFBO[0], self.sizeFBO[1])
+            self.rightDrawBuffer, sizeFBO[0], sizeFBO[1])
         self.screenFBO, self.screenTexture, self.screenRender = setupFBO(self,
-            self.screenDrawBuffer, self.size[0], self.size[1])
+            self.screenDrawBuffer, self._size[0], self._size[1])
 
         return True
 
@@ -262,14 +255,14 @@ class MultiRenderWindow(window.Window):
 
         flipThisFrame = self._startOfFlip()
         if flipThisFrame:
-            # call stereo rendering functions
-            self._stereoRender()
+            # set the viewport to span the whole screen area
+            self._setSize(fbo=False)
 
-            # render the screen FBO to the back buffer
+            # render the screen texture to the back buffer
             self._prepareFBOrender()
 
-            if self.bits != None:
-                self.bits._prepareFBOrender()
+            #if self.bits != None:
+            #    self.bits._prepareFBOrender()
 
             # unbind the framebuffer as the render target
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
@@ -277,17 +270,7 @@ class MultiRenderWindow(window.Window):
             stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
             GL.glDisable(GL.GL_STENCIL_TEST)
 
-            # before flipping need to copy the renderBuffer to the
-            # frameBuffer
-
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glEnable(GL.GL_TEXTURE_2D)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.screenTexture)
-            GL.glColor3f(1.0, 1.0, 1.0)  # glColor multiplies with texture
-            GL.glColorMask(True, True, True, True)
-
-            self._renderFBO()
-
+            self._stereoRender() # call stereo rendering function
             self._finishFBOrender()
 
         # call this before flip() whether FBO was used or not
@@ -424,26 +407,17 @@ class MultiRenderWindow(window.Window):
         """
         if buffer == 'left':
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftFBO)
-            GL.glViewport(0, 0, self.size[0], self.size[1])
-            GL.glMatrixMode(GL.GL_PROJECTION)
-            GL.glLoadIdentity()
-            GL.glOrtho(-1, 1, -1, 1, -1, 1)
-            GL.glMatrixMode(GL.GL_MODELVIEW)
-            GL.glLoadIdentity()
+            self._setSize(fbo=True)
 
         elif buffer == 'right':
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.rightFBO)
-            GL.glViewport(0, 0, self.size[0], self.size[1])
-            GL.glMatrixMode(GL.GL_PROJECTION)
-            GL.glLoadIdentity()
-            GL.glOrtho(-1, 1, -1, 1, -1, 1)
-            GL.glMatrixMode(GL.GL_MODELVIEW)
-            GL.glLoadIdentity()
+            self._setSize(fbo=True)
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
     
     def _finishFBOrender(self):
+        GL.glDisable(GL.GL_TEXTURE_2D)
         GL.glEnable(GL.GL_BLEND)
         GL.glUseProgram(0)
 
@@ -451,6 +425,22 @@ class MultiRenderWindow(window.Window):
         """Override with code to configure and execute transfering stereo
         buffers to textures and blitting them to the back buffer."""
         pass
+    
+    def _setSize(self, fbo):
+        """Ensure the size of the FBO is returned when something gets
+        Window.size. A bit of a hack, but will work well for now."""
+
+        if fbo:
+            self.size = self._getFBOSize()
+        else:
+            self.size = self._size
+
+        GL.glViewport(0, 0, self.size[0], self.size[1])
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glLoadIdentity()
+        GL.glOrtho(-1, 1, -1, 1, -1, 1)
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
 
 """
 Below are the stereo window classes that produce various stereo displays. Each
@@ -479,37 +469,12 @@ class SpannedWindow(MultiRenderWindow):
         self._progStereoShader = self._progFBOtoFrame
 
     def _getFBOSize(self):
-        return numpy.array((int(self.size[0]/2.), int(self.size[1])), numpy.int)
+        return numpy.array((int(self._size[0]/2), int(self._size[1])), numpy.int)
     
-    def _prepareStereoFBOrender(self):
+    def _prepareFBOrender(self):
         GL.glUseProgram(self._progStereoShader)
-        #GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-        #    "leftEyeTexture"), 1)
-        #GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-        #    "rightEyeTexture"), 2)
-
-    def _stereoRender(self):
-        # bind the shader program and configure
-        self._prepareStereoFBOrender()
-
-        # set screen FBO as rendering target
-        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.screenFBO)
-        GL.glDisable(GL.GL_BLEND)
-        stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
-        GL.glDisable(GL.GL_STENCIL_TEST)
-
-        # set the viewport to span the whole screen area
-        GL.glViewport(0, 0, self.size[0], self.size[1])
-        GL.glMatrixMode(GL.GL_PROJECTION)
-        GL.glLoadIdentity()
-        GL.glOrtho(-1, 1, -1, 1, -1, 1)
-        GL.glMatrixMode(GL.GL_MODELVIEW)
-        GL.glLoadIdentity()
-
-        # blit left texture on the left side of screen
-        GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
-        GL.glColorMask(True, True, True, True)
+    
+    def _renderLeftFBO(self):
         GL.glBegin(GL.GL_QUADS)
         GL.glTexCoord2f(0.0, 0.0)
         GL.glVertex2f(-1.0, -1.0)
@@ -520,10 +485,8 @@ class SpannedWindow(MultiRenderWindow):
         GL.glTexCoord2f(1.0, 0.0)
         GL.glVertex2f(0.0, -1.0)
         GL.glEnd()
-
-        # blit right texture on the right side of screen
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
-        GL.glColorMask(True, True, True, True)
+    
+    def _renderRightFBO(self):
         GL.glBegin(GL.GL_QUADS)
         GL.glTexCoord2f(0.0, 0.0)
         GL.glVertex2f(0.0, -1.0)
@@ -535,95 +498,19 @@ class SpannedWindow(MultiRenderWindow):
         GL.glVertex2f(1.0, -1.0)
         GL.glEnd()
 
-        # enable blending and stencil
-        GL.glEnable(GL.GL_BLEND)
-        if stencilOn:
-            GL.glEnable(GL.GL_STENCIL_TEST)
+    def _stereoRender(self):
 
-class PageFlipWindow(MultiRenderWindow):
+        # blit left texture on the left side of screen
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
+        GL.glColorMask(True, True, True, True)
+        self._renderLeftFBO()
 
-    """Create a temporally interleaved (page-flipping) display; where left and
-    right eye images alternate automatically between flip() calls. This mode is
-    not compatible with shutter glass systems that require a VESA stereo port
-    connection, use window.Window(stereo=True) for that support.
-    """
+        # blit right texture on the right side of screen
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
+        GL.glColorMask(True, True, True, True)
+        self._renderRightFBO()
 
-    def __init__(self, *args, **kwargs):
-        self._toggle_eye = False
-        MultiRenderWindow.__init__(self, *args, **kwargs)
-
-    def setEye(self, left=True):
-        """Manually set the eye being used, needed for custom flash protocols"""
-        self._toggle_eye = left
-
-    def _endOfFlip(self, clearBuffer):
-        """Override end of flip with custom color channel masking if required
-        """
-        self._toggle_eye = not self._toggle_eye
-
-        if clearBuffer:
-            # clear the framebuffer color buffers
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.rightFBO)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftFBO)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-
-    def _afterFBOrender(self):
-        """
-        Call after the texture containing the stereo frame has been drawn.
-        """
-        # draw blue line
-        GL.glDisable(GL.GL_TEXTURE_2D)
-        GL.glColor3f(0.0, 0.0, 0.0)
-        GL.glLineWidth(2)
-        GL.glBegin(GL.GL_LINES)
-        GL.glVertex2f(-1.0, -1.0)
-        GL.glVertex2f(1.0, -1.0)
-        GL.glEnd()
-
-        GL.glColor3f(0.0, 0.0, 1.0)
-        GL.glLineWidth(2)
-        GL.glBegin(GL.GL_LINES)
-        GL.glVertex2f(-1.0, -1.0)
-
-        if self._toggle_eye:
-            GL.glVertex2f(-0.5, -1.0)
-        else:
-            GL.glVertex2f(0.5, -1.0)
-
-        GL.glEnd()
-
-    def _compileStereoShader(self):
-        useProg = '''
-            uniform sampler2D leftEyeTexture;
-            uniform sampler2D rightEyeTexture;
-            uniform bool useLeftEye;
-
-            void main() {
-                if (useLeftEye) {
-                    vec4 textureFrag = texture2D(leftEyeTexture,
-                                                 gl_TexCoord[0].st);
-                    gl_FragColor.rgba = textureFrag.rgba;
-                }
-                else {
-                    vec4 textureFrag = texture2D(rightEyeTexture,
-                                                 gl_TexCoord[0].st);
-                    gl_FragColor.rgba = textureFrag.rgba;
-                }
-            }
-            '''
-
-        self._progStereoShader = _shaders.compileProgram(
-            _shaders.vertSimple, useProg)
-
-    def _setupStereoFrag(self):
-        GL.glUseProgram(self._progStereoShader)
-        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-            "leftEyeTexture"), 1)
-        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-            "rightEyeTexture"), 2)
-        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
-            "useLeftEye"), self._toggle_eye)
 
 class AnaglyphWindow(MultiRenderWindow):
 
@@ -636,9 +523,27 @@ class AnaglyphWindow(MultiRenderWindow):
     """
 
     def __init__(self, *args, **kwargs):
-        self.colLeft = kwargs.get('colLeft', (1.0, 0.0, 0.0))
-        self.colRight = kwargs.get('colRight', (0.0, 1.0, 1.0))
         MultiRenderWindow.__init__(self, *args, **kwargs)
+
+    def _prepareFBOrender(self):
+        """Bind and configure the stereo shader. This is overridden by shaders
+        needing more options."""
+        GL.glUseProgram(self._progStereoShader)
+        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
+            "leftEyeTexture"), 1)
+        GL.glUniform1i(GL.glGetUniformLocation(self._progStereoShader,
+            "rightEyeTexture"), 2)
+
+    def _stereoRender(self):
+        # set the viewport to span the whole screen area
+        #self._setSize(fbo=False)
+
+        GL.glActiveTexture(GL.GL_TEXTURE1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
+        GL.glActiveTexture(GL.GL_TEXTURE2)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
+
+        self._renderFBO()
 
     def _compileStereoShader(self):
         fragShader = '''
