@@ -1604,6 +1604,8 @@ class Window(object):
             logging.warning("Framebuffer object (FBO) is required for "
                             "blendMode='add'. Reverting to blendMode='avg'")
             self.blendMode = 'avg'
+        
+        self._afterSetupGL()
 
     def _setupShaders(self):
         self._progSignedTexFont = _shaders.compileProgram(
@@ -1904,6 +1906,9 @@ class Window(object):
         """
         if clearBuffer:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+    
+    def _afterSetupGL(self):
+        pass
 
 
 def getMsPerFrame(myWin, nFrames=60, showVisual=False, msg='', msDelay=0.):
