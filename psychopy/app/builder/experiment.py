@@ -593,7 +593,14 @@ class Experiment(object):
                 self.flow.append(LoopTerminator(
                     loop=loops[elementNode.get('name')]))
             elif elementNode.tag == "Routine":
-                self.flow.append(self.routines[elementNode.get('name')])
+                if elementNode.get('name') in self.routines:
+                    self.flow.append(self.routines[elementNode.get('name')])
+                else:
+                    logging.error("A Routine called '{}' was on the Flow but "
+                                 "could not be found (failed rename?). You "
+                                 "may need to re-insert it"
+                                 .format(elementNode.get('name')))
+                    logging.flush()
 
         if modifiedNames:
             msg = 'duplicate variable name(s) changed in loadFromXML: %s\n'
@@ -858,9 +865,13 @@ class TrialHandler(object):
         # write the code
         code = ("\n# set up handler to look after randomisation of conditions etc\n"
                 "%(name)s = data.TrialHandler(nReps=%(nReps)s, method=%(loopType)s, \n"
-                "    extraInfo=expInfo, originPath=-1,\n"
-                "    trialList=" + condsStr + ",\n"  # conditions go here
-                "    seed=%(random seed)s, name='%(name)s')\n")
+                "    extraInfo=expInfo, originPath=-1,\n")
+        buff.writeIndentedLines(code % inits)
+        # the next line needs to be kept separate to preserve potential string formatting 
+        # by the user in condStr (i.e. it shouldn't be a formatted string itself
+        code = "    trialList=" + condsStr + ",\n"  # conditions go here
+        buff.writeIndented(code)
+        code = "    seed=%(random seed)s, name='%(name)s')\n"
         buff.writeIndentedLines(code % inits)
 
         code = ("thisExp.addLoop(%(name)s)  # add the loop to the experiment\n" +
