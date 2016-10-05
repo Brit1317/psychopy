@@ -216,8 +216,8 @@ class MultiRenderWindow(window.Window):
             return False
 
         # allocate colour attachments as render targets
-        self.leftDrawBuffer = color_attach_base + (maxAttach.value - 2)
-        self.rightDrawBuffer = color_attach_base + (maxAttach.value - 1)
+        self.leftDrawBuffer = color_attach_base + (maxAttach.value - 3)
+        self.rightDrawBuffer = color_attach_base + (maxAttach.value - 2)
         self.screenDrawBuffer = color_attach_base + (maxAttach.value - 1)
 
         # create C_UINT typed array for multi-buffer draw
@@ -279,6 +279,7 @@ class MultiRenderWindow(window.Window):
 
             # before flipping need to copy the renderBuffer to the
             # frameBuffer
+
             GL.glActiveTexture(GL.GL_TEXTURE0)
             GL.glEnable(GL.GL_TEXTURE_2D)
             GL.glBindTexture(GL.GL_TEXTURE_2D, self.screenTexture)
