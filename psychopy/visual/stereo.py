@@ -137,8 +137,7 @@ class MultiRenderWindow(window.Window):
         driver must do when switching attachments, leading to increased overhead
         and latency.
         """
-        def setupFBO(self, colAttach=GL.GL_COLOR_ATTACHMENT0_EXT, w=800, h=600, 
-            msaaColor=2, msaaDepth=0):
+        def setupFBO(self, colAttach=GL.GL_COLOR_ATTACHMENT0_EXT, w=800, h=600):
 
             # get new FBO ID and bind
             idxFBO = GL.GLuint()
@@ -162,15 +161,8 @@ class MultiRenderWindow(window.Window):
             GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, idxRender)
 
             # the render buffer may need multi-sampling
-            if msaaDepth > 0 and (msaaDepth % 2 == 0) and msaaDepth < 32:
-                GL.glRenderbufferStorageMultisampleEXT(GL.GL_RENDERBUFFER_EXT, 
-                    msaaDepth, GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))
-            elif msaaDepth == 0:
-                GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
-                    GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))
-            else:
-                print("invalid number of render MSAA samples specified")
-                sys.exit(1) 
+            GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
+                GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))
 
             # attach the colour buffer to the FBO
             GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, colAttach,
