@@ -155,7 +155,7 @@ class MultiRenderWindow(window.Window):
                                GL.GL_LINEAR)
             
             # use multisampling for texture buffer
-            if (msaaColor > 0) and (msaaColor % 2 == 0):
+            if (msaaColor > 0) and (msaaColor % 2 == 0) and msaaColor < 32:
                 # newer GL?
                 GL.glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaaColor, 
                     GL.GL_RGBA32F_ARB,  int(w), int(h), GL.GL_TRUE)
@@ -179,7 +179,7 @@ class MultiRenderWindow(window.Window):
             GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, idxRender)
 
             # the render buffer may need multi-sampling
-            if msaaDepth > 0 and (msaaDepth % 2 == 0):
+            if msaaDepth > 0 and (msaaDepth % 2 == 0) and msaaDepth < 32:
                 GL.glRenderbufferStorageMultisampleEXT(GL.GL_RENDERBUFFER_EXT, 
                     msaaDepth, GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))
             elif msaaDepth == 0:
