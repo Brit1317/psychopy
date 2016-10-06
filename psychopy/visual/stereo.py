@@ -138,7 +138,7 @@ class MultiRenderWindow(window.Window):
         and latency.
         """
         def setupFBO(self, colAttach=GL.GL_COLOR_ATTACHMENT0_EXT, w=800, h=600, 
-            msaaColor=4, msaaDepth=4):
+            msaaColor=2, msaaDepth=0):
 
             # get new FBO ID and bind
             idxFBO = GL.GLuint()
@@ -153,25 +153,8 @@ class MultiRenderWindow(window.Window):
                                GL.GL_LINEAR)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
                                GL.GL_LINEAR)
-            
-            # use multisampling for texture buffer
-            if (msaaColor > 0) and (msaaColor % 2 == 0) and msaaColor < 32:
-                # newer GL?
-                GL.glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaaColor, 
-                    GL.GL_RGBA32F_ARB,  int(w), int(h), GL.GL_TRUE)
-            elif msaaColor == 0:
-                # default psychopy
-                GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA32F_ARB,
-                    int(w), int(h), 0, GL.GL_RGBA, GL.GL_FLOAT, None)
-            else:
-                # argument not a valid MSAA value
-                print("invalid number of color MSAA samples specified")
-                sys.exit(1) 
-
-            # set the color buffer as a read/draw target and clear it
-            GL.glReadBuffer(colAttach)
-            GL.glDrawBuffer(colAttach)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA32F_ARB, 
+                int(w), int(h), 0, GL.GL_RGBA, GL.GL_FLOAT, None)
 
             # generate render buffer ID and bind it
             idxRender = GL.GLuint()
@@ -192,6 +175,10 @@ class MultiRenderWindow(window.Window):
             # attach the colour buffer to the FBO
             GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, colAttach,
                                          GL.GL_TEXTURE_2D, idxTexture, 0)
+            # set the color buffer as a read/draw target and clear it
+            GL.glReadBuffer(colAttach)
+            GL.glDrawBuffer(colAttach)
+            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
             # attach the render buffer to the FBO
             GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
