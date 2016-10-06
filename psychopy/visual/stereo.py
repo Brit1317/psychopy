@@ -63,7 +63,6 @@ class MultiRenderWindow(window.Window):
 
     def __init__(self, *args, **kwargs):
 
-        self._renderTarget = 0
         # check for troublesome window settings
         if 'stereo' in kwargs:
             logging.warning("Requesting a quad-buffered stereo window is not "
