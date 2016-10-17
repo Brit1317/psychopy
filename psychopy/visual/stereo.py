@@ -162,7 +162,7 @@ class MultiRenderWindow(window.Window):
     Caveats:
 
     1.   Video driver support for Framebuffer objects (FBOs) and
-         programmable fragment shaders is required (OpenGL 3.2+).
+         programmable fragment shaders is required (OpenGL 2.1+).
          Most modern graphics cards will have support for these functions.
          Ensure your graphics drivers are updated for best results.
 
@@ -171,7 +171,6 @@ class MultiRenderWindow(window.Window):
          draw() stimulus class method directly when rendering and writing your
          own click detection system.
 
-    3.   Requires GPU support for anti-aliasing (OpenGL 3.2+).
     """
 
     def __init__(self, *args, **kwargs):
