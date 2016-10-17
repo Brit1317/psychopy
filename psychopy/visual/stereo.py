@@ -22,13 +22,14 @@ from . import globalVars
 reportNDroppedFrames = 5  # stop raising warning after this
 
 class Framebuffer(object):
-    """Abstract off-screen rendering targets for stereo renderings. Requires
+    """Abstracted off-screen rendering targets for stereo renderings. Requires
     OpenGL 2.1+ to work properly. 
     """
 
-    def __init__(self, width=800, height=600, multiSample=False):
+    def __init__(self, width=800, height=600, depth=8, multiSample=False):
         self.width = width
         self.height = height
+        self.depth = depth
 
         self._initFramebuffer()
 
@@ -48,8 +49,14 @@ class Framebuffer(object):
         self.textureMSid = GL.GLuint()
         GL.glGenTexturesEXT(1, ctypes.byref(self.textureMSid))
         GL.glBindTextureEXT(GL.GL_TEXTURE_2D_MULTISAMPLE, self.textureMSid)
+
+        if self.depth == 8:
+            useDepth = GL.GL_RGBA8
+        elif self.depth == 16:
+            useDepth = GL.GL_RGBA16
+
         GL.glTexImage2DMultisample(GL.GL_TEXTURE_2D_MULTISAMPLE, self._numSamples, 
-            GL.GL_RGBA32F_ARB, int(w), int(h), GL.GL_TRUE)
+            useDepth, int(w), int(h), GL.GL_TRUE)
 
         # attatch textures 
         GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, GL.GL_COLOR_ATTACHMENT0_EXT, 
@@ -111,7 +118,13 @@ class Framebuffer(object):
         GL.glTexParameteri(GL.GL_TEXTURE_2D,
                            GL.GL_TEXTURE_MIN_FILTER,
                            GL.GL_LINEAR)
-        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA32F_ARB,
+
+        if self.depth == 8:
+            useDepth = GL.GL_RGBA8
+        elif self.depth == 16:
+            useDepth = GL.GL_RGBA16
+
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, useDepth,
                         int(self.width), int(self.height), 0,
                         GL.GL_RGBA, GL.GL_FLOAT, None)
         # attach texture to the frame buffer
@@ -151,13 +164,20 @@ class Framebuffer(object):
         GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
         GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
-    def resolveMSAA(self):
-        pass
+    def resolveMSAA(self, targetFBO):
+        """Blit multisample texture to simple FBO texture for use"""
+        #GL.glViewport(0, 0, self.size[0], self.size[1])
+        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, targetFBO.)
+        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, targetFBO)
+        GL.glDrawBuffer(self.leftDrawBuffer)    
+        GL.glBlitFramebufferEXT(0, 0, self.width, self.height, 0, 0, 
+            self.width, self.height, GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
     
     def bindTexture(self, where=GL.GL_TEXTURE0):
         pass
     
-    def bindFBO(self):
+    def bindFBO(self, read=True, draw=True):
+        """Convienence function to bind FBO for read and draw."""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
     
     def unbindFBO(self, to_target=0):
