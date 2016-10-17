@@ -21,6 +21,151 @@ from . import globalVars
 
 reportNDroppedFrames = 5  # stop raising warning after this
 
+class Framebuffer(object):
+    """Abstract off-screen rendering targets for stereo renderings. Requires
+    OpenGL 2.1+ to work properly. 
+    """
+
+    def __init__(self, width=800, height=600, multiSample=False):
+        self.width = width
+        self.height = height
+
+        self._initFramebuffer()
+
+        # MSAA
+        self._multiSample = multiSample
+        self._numSamples = numSamples
+
+        if self._multiSample:
+            self._initMSframebuffer()
+    
+    def _initMSframebuffer(self):
+        self.frameBufferMSid = GL.GLuint()
+        GL.glGenFramebuffersEXT(1, ctypes.byref(self.frameBufferMSid))
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferMSid)
+
+        # multisample color buffer
+        self.textureMSid = GL.GLuint()
+        GL.glGenTexturesEXT(1, ctypes.byref(self.textureMSid))
+        GL.glBindTextureEXT(GL.GL_TEXTURE_2D_MULTISAMPLE, self.textureMSid)
+        GL.glTexImage2DMultisample(GL.GL_TEXTURE_2D_MULTISAMPLE, self._numSamples, 
+            GL.GL_RGBA32F_ARB, int(w), int(h), GL.GL_TRUE)
+
+        # attatch textures 
+        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, GL.GL_COLOR_ATTACHMENT0_EXT, 
+            GL.GL_TEXTURE_2D_MULTISAMPLE, self.textureMSid, 0)
+
+        # clear buffers
+        GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
+        GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+
+        # render buffer
+        self.renderMSid = GL.GLuint()
+        GL.glGenRenderbuffersEXT(1, ctypes.byref(self.renderMSid))
+        GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT,  self.renderMSid)
+
+        # the render buffer with multi-sampling
+        GL.glRenderbufferStorageMultisampleEXT(GL.GL_RENDERBUFFER_EXT, self._numSamples, 
+            GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))  
+
+        # attach the render buffer to the FBO
+        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
+                                        GL.GL_STENCIL_ATTACHMENT_EXT,
+                                        GL.GL_RENDERBUFFER_EXT,
+                                        self.renderMSid)
+
+        # status check to see if the framebuffer is complete
+        status =  GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
+        if status !=  GL.GL_FRAMEBUFFER_COMPLETE_EXT:
+            if status == GL.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
+                print("cannot create multisample framebuffer")
+            
+            # unbind on failure and exit
+            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
+
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        # clear the buffers (otherwise the texture memory can contain
+        # junk from other app)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
+        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
+    
+    def _initFramebuffer(self):
+        """Setup frambuffer object for off-screen rendering without multi-sampling.
+        Setup is much like that in the window.Window class. This is likely to be
+        only used as a target for MSAA resolution."""
+
+        # create FBO
+        self.frameBufferId = GL.GLuint()
+        GL.glGenFramebuffersEXT(1, ctypes.byref(self.frameBufferId))
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
+
+        # Create texture to render to
+        self.textureId = GL.GLuint()
+        GL.glGenTextures(1, ctypes.byref(self.textureId))
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D,
+                           GL.GL_TEXTURE_MAG_FILTER,
+                           GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D,
+                           GL.GL_TEXTURE_MIN_FILTER,
+                           GL.GL_LINEAR)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA32F_ARB,
+                        int(self.width), int(self.height), 0,
+                        GL.GL_RGBA, GL.GL_FLOAT, None)
+        # attach texture to the frame buffer
+        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT,
+                                     GL.GL_COLOR_ATTACHMENT0_EXT,
+                                     GL.GL_TEXTURE_2D, 
+                                     self.textureId, 0)
+        
+        # clear buffers
+        GL.glReadBuffer(GL.GL_COLOR)
+        GL.glDrawBuffer(colAttach)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+                            
+        # add a stencil buffer
+        self.renderBufferId = GL.GLuint()
+        GL.glGenRenderbuffersEXT(1, ctypes.byref(
+            self.renderBufferId))  # like glGenTextures
+        GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, self.renderBufferId)
+        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
+                                    GL.GL_DEPTH24_STENCIL8_EXT,
+                                    int(self.width), int(self.height))
+        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
+                                        GL.GL_STENCIL_ATTACHMENT_EXT,
+                                        GL.GL_RENDERBUFFER_EXT,
+                                        self.renderBufferId)
+
+        status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
+        if status != GL.GL_FRAMEBUFFER_COMPLETE_EXT:
+            logging.error("Error in framebuffer activation")
+            # UNBIND THE FRAME BUFFER OBJECT THAT WE HAD CREATED
+            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
+
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        # clear the buffers (otherwise the texture memory can contain
+        # junk from other app)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
+        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
+
+    def resolveMSAA(self):
+        pass
+    
+    def bindTexture(self, where=GL.GL_TEXTURE0):
+        pass
+    
+    def bindFBO(self):
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
+    
+    def unbindFBO(self, to_target=0):
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, to_target)
+    
+    def clearBuffer(self, what=GL.GL_COLOR_BUFFER_BIT):
+        GL.glClear(what)
+
 class MultiRenderWindow(window.Window):
 
     """
