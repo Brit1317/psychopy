@@ -168,7 +168,7 @@ class Window(object):
                 Size of the window in pixels (X,Y)
             pos : *None* or (x,y)
                 Location of the window on the screen
-            rgb : [0,0,0]
+            color : [0,0,0]
                 Color of background as [r,g,b] list or single value.
                 Each gun can take values between -1 and 1
             fullscr : *None*, True or False
@@ -875,9 +875,9 @@ class Window(object):
         GL.glReadPixels(0, 0, self.size[0], self.size[1],
                         GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, bufferDat)
         try:
-            im = Image.fromstring(mode='RGBA', size=self.size, data=bufferDat)
+            im = Image.fromstring(mode='RGBA', size=tuple(self.size), data=bufferDat)
         except Exception:
-            im = Image.frombytes(mode='RGBA', size=self.size, data=bufferDat)
+            im = Image.frombytes(mode='RGBA', size=tuple(self.size), data=bufferDat)
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
         im = im.convert('RGB')
 
