@@ -26,87 +26,24 @@ class Framebuffer(object):
     OpenGL 2.1+ to work properly. 
     """
 
-    def __init__(self, width=800, height=600, depth=16, multiSample=False):
-        
+    def __init__(self, win, width=800, height=600, bpp=16):
+        # window pointer 
+        self.win = win
+
         # basic settings
         self.width = width
         self.height = height
-        self.depth = depth
+        self.bpp = bpp
 
         # create the framebuffer
         self._initFramebuffer()
-
-        # MSAA settings
-        self._multiSample = multiSample
-        self._numSamples = numSamples
-
-        if self._multiSample:
-            # create MSAA framebuffer if needed
-            self._initMSframebuffer()
-
-    def _initMSframebuffer(self):
-        self.frameBufferMSid = GL.GLuint()
-        GL.glGenFramebuffersEXT(1, ctypes.byref(self.frameBufferMSid))
-        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferMSid)
-
-        # multisample color buffer
-        self.textureMSid = GL.GLuint()
-        GL.glGenTexturesEXT(1, ctypes.byref(self.textureMSid))
-        GL.glBindTextureEXT(GL.GL_TEXTURE_2D_MULTISAMPLE, self.textureMSid)
-
-        if self.depth == 8:
-            useDepth = GL.GL_RGBA8
-        elif self.depth == 16:
-            useDepth = GL.GL_RGBA16
-
-        GL.glTexImage2DMultisample(GL.GL_TEXTURE_2D_MULTISAMPLE, self._numSamples, 
-            useDepth, int(w), int(h), GL.GL_TRUE)
-
-        # attatch textures 
-        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, GL.GL_COLOR_ATTACHMENT0_EXT, 
-            GL.GL_TEXTURE_2D_MULTISAMPLE, self.textureMSid, 0)
-
-        # clear buffers
-        GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
-        GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-
-        # render buffer
-        self.renderMSid = GL.GLuint()
-        GL.glGenRenderbuffersEXT(1, ctypes.byref(self.renderMSid))
-        GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT,  self.renderMSid)
-
-        # the render buffer with multi-sampling
-        GL.glRenderbufferStorageMultisampleEXT(GL.GL_RENDERBUFFER_EXT, self._numSamples, 
-            GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))  
-
-        # attach the render buffer to the FBO
-        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
-                                        GL.GL_STENCIL_ATTACHMENT_EXT,
-                                        GL.GL_RENDERBUFFER_EXT,
-                                        self.renderMSid)
-
-        # status check to see if the framebuffer is complete
-        status =  GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
-        if status !=  GL.GL_FRAMEBUFFER_COMPLETE_EXT:
-            # FBO could be complete, but check if MSAA ready
-            if status == GL.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-                print("cannot create multisample framebuffer")
-            
-            # unbind on failure and exit
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-
-        GL.glDisable(GL.GL_TEXTURE_2D)
-        # clear the buffers (otherwise the texture memory can contain
-        # junk from other app)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
-        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
+    
+    def __repr__(self):
+        return self.frameBufferId
     
     def _initFramebuffer(self):
         """Setup frambuffer object for off-screen rendering without multi-sampling.
-        Setup is much like that in the window.Window class. This is likely to be
-        only used as a target for MSAA resolution."""
+        Setup is much like that in the window.Window class."""
 
         # create FBO
         self.frameBufferId = GL.GLuint()
@@ -125,12 +62,12 @@ class Framebuffer(object):
                            GL.GL_LINEAR)
 
         # configure texture settings
-        if self.depth == 8:
-            useDepth = GL.GL_RGBA8
-        elif self.depth == 16:
-            useDepth = GL.GL_RGBA16
+        if self.bpp == 8:
+            useBPP = GL.GL_RGBA8
+        elif self.bpp == 16:
+            useBPP = GL.GL_RGBA16
 
-        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, useDepth,
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, useBPP,
                         int(self.width), int(self.height), 0,
                         GL.GL_RGBA, GL.GL_FLOAT, None)
 
@@ -167,43 +104,30 @@ class Framebuffer(object):
             # should hard crash here, you can't do anything with stereo
             # if this fails
 
+            return None
+
         GL.glDisable(GL.GL_TEXTURE_2D)
         # clear the buffers (otherwise the texture memory can contain
         # junk from other app)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        #GL.glClear(GL.GL_COLOR_BUFFER_BIT)
         GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
         GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
-    def resolveMSAA(self, targetFBO):
-        """Blit multisample texture to simple FBO texture for use"""
-        #GL.glViewport(0, 0, self.size[0], self.size[1])
-        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, self.frameBufferMSid)
-        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, self.frameBufferId)
-        GL.glDrawBuffer(self.GL.GL_COLOR_ATTACHMENT0_EXT)    
-        GL.glBlitFramebufferEXT(0, 0, self.width, self.height, 0, 0, 
-            self.width, self.height, GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
-    
     def bindTexture(self, where=GL.GL_TEXTURE0):
         pass
     
     def bindFBO(self, finalize=False):
-        """Convienence function to bind FBO for read and draw. Set finalize to
-        True resolve MSAA. Do this before blitting to back buffer."""
-        if finalize and self._multiSample:
-            # resolve MSAA and bind the simple texture to buffer
-            self.resolveMSAA()
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
-        elif self._multiSample:
-            # bind to the multisample buffer as the render target,
-            # not being copied to render buffer yet.
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferMSid)
-        else:
-            # only simple texture being used
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
+        """Convienence function to bind FBO for read and draw"""
+
+        # only simple texture being used
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
+        GL.glViewport(0, 0, self.width, self.height)
+        self.win.size = [self.width, self.height]
     
     def unbindFBO(self, toTarget=0):
         """Unbind to default framebuffer to default (0)"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, toTarget)
+        GL.glViewport(0, 0, self.win.size[0], self.win.size[1])
     
     def clearBuffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
         GL.glClear(buffer)
@@ -291,10 +215,8 @@ class MultiRenderWindow(window.Window):
         """
         if clearBuffer:
             # clear the framebuffer color buffers
-            GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.rightFBO)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-            GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.leftFBO)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+            self.rightFBO.clearBuffer()
+            self.leftFBO.clearBuffer()
 
     def _prepareFBOrender(self):
         """Bind and configure the stereo shader. This is overridden by shaders
@@ -332,130 +254,6 @@ class MultiRenderWindow(window.Window):
         
         return samples.value
 
-    def _resolveMSAA(self):
-        """Blit multisample texture to simple FBO texture for use"""
-        pass
-        
-    def _setupSimpleFBO(self, colAttach=GL.GL_COLOR_ATTACHMENT0_EXT, w=800, h=600):
-        """Setup frambuffer object fir off-screen rendering without multi-sampling.
-        Setup is much like that in the window.Window class. This is likely to be
-        only used as a target for MSAA resolution."""
-
-        # create FBO
-        idxFBO = GL.GLuint()
-        GL.glGenFramebuffersEXT(1, ctypes.byref(idxFBO))
-        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, idxFBO)
-
-        # Create texture to render to
-        idxTexture = GL.GLuint()
-        GL.glGenTextures(1, ctypes.byref(idxTexture))
-        GL.glBindTexture(GL.GL_TEXTURE_2D, idxTexture)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D,
-                           GL.GL_TEXTURE_MAG_FILTER,
-                           GL.GL_LINEAR)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D,
-                           GL.GL_TEXTURE_MIN_FILTER,
-                           GL.GL_LINEAR)
-        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA32F_ARB,
-                        int(w), int(h), 0,
-                        GL.GL_RGBA, GL.GL_FLOAT, None)
-        # attach texture to the frame buffer
-        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT,
-                                     colAttach,
-                                     GL.GL_TEXTURE_2D, 
-                                     idxTexture, 0)
-        
-        # clear buffers
-        GL.glReadBuffer(colAttach)
-        GL.glDrawBuffer(colAttach)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-                            
-        # add a stencil buffer
-        idxRender = GL.GLuint()
-        GL.glGenRenderbuffersEXT(1, ctypes.byref(
-            idxRender))  # like glGenTextures
-        GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, idxRender)
-        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
-                                    GL.GL_DEPTH24_STENCIL8_EXT,
-                                     int(w), int(h))
-        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
-                                        GL.GL_STENCIL_ATTACHMENT_EXT,
-                                        GL.GL_RENDERBUFFER_EXT,
-                                        idxRender)
-
-        status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
-        if status != GL.GL_FRAMEBUFFER_COMPLETE_EXT:
-            logging.error("Error in framebuffer activation")
-            # UNBIND THE FRAME BUFFER OBJECT THAT WE HAD CREATED
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-
-        GL.glDisable(GL.GL_TEXTURE_2D)
-        # clear the buffers (otherwise the texture memory can contain
-        # junk from other app)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
-        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
-
-        return idxFBO, idxTexture, idxRender
-
-    def _setupMultiSampleFBO(self, colAttach=GL.GL_COLOR_ATTACHMENT0_EXT, 
-                             w=800, h=600):
-        """Setup a multisample framebuffer as a render target. This will provide
-        hardware accellerated anti-aliasing when drawing stimuli off-screen."""
-
-        # create FBO
-        idxFBO = GL.GLuint()
-        GL.glGenFramebuffersEXT(1, ctypes.byref(idxFBO))
-        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, idxFBO)
-
-        # multisample color buffer
-        idxTexture = GL.GLuint()
-        GL.glGenTexturesEXT(1, ctypes.byref(idxTexture))
-        GL.glBindTextureEXT(GL.GL_TEXTURE_2D_MULTISAMPLE, idxTexture)
-        GL.glTexImage2DMultisample(GL.GL_TEXTURE_2D_MULTISAMPLE, self.aa_samples, 
-            GL.GL_RGBA32F_ARB, int(w), int(h), GL.GL_TRUE)
-
-        # render buffer
-        idxRender = GL.GLuint()
-        GL.glGenRenderbuffersEXT(1, ctypes.byref(idxRender))
-        GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, idxRender)
-        # the render buffer with multi-sampling
-        GL.glRenderbufferStorageMultisampleEXT(GL.GL_RENDERBUFFER_EXT, self.aa_samples, 
-            GL.GL_DEPTH24_STENCIL8_EXT, int(w), int(h))  
-
-        # attatch textures 
-        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, colAttach, 
-            GL.GL_TEXTURE_2D_MULTISAMPLE, idxTexture, 0)
-        
-        # clear buffers
-        GL.glReadBuffer(colAttach)
-        GL.glDrawBuffer(colAttach)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-
-        # attach the render buffer to the FBO
-        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
-                                        GL.GL_STENCIL_ATTACHMENT_EXT,
-                                        GL.GL_RENDERBUFFER_EXT,
-                                        idxRender)
-
-        # status check to see if the framebuffer is complete
-        status =  GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
-        if status !=  GL.GL_FRAMEBUFFER_COMPLETE_EXT:
-            if status == GL.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-                print("cannot create multisample framebuffer")
-            
-            # unbind on failure and exit
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-
-        GL.glDisable(GL.GL_TEXTURE_2D)
-        # clear the buffers (otherwise the texture memory can contain
-        # junk from other app)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
-        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
-        
-        return idxFBO, idxTexture, idxRender
-
     def _setupStereoFBO(self):
         """Setup a Frame Buffer Objects to handle offscreen rendering of eye
         images.
@@ -469,52 +267,9 @@ class MultiRenderWindow(window.Window):
         and latency.
         """
 
-        # get base color attachment offset
-        color_attach_base =  GL.GL_COLOR_ATTACHMENT0
-
-        # allocate 3 attachments for stereo rendering near the end of the
-        # range to reduce chances of interfering with user FBO color attachments
-        maxAttach = ctypes.c_int(0)
-        GL.glGetIntegerv(GL.GL_MAX_COLOR_ATTACHMENTS, ctypes.byref(maxAttach))
-
-        # check if our driver can access at least 4 colour attachments
-        if maxAttach.value < 4:
-            print("Error not enough color attachments available.")
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER, 0)
-
-            return False
-
-        # allocate colour attachments as render targets
-        self.leftDrawBuffer = color_attach_base + (maxAttach.value - 2)
-        self.rightDrawBuffer = color_attach_base + (maxAttach.value - 1)
-        self.leftMSAADrawBuffer = color_attach_base + (maxAttach.value - 4)
-        self.rightMSAADrawBuffer = color_attach_base + (maxAttach.value - 3)
-        #self.screenDrawBuffer = color_attach_base + (maxAttach.value - 1)
-
-        # create C_UINT typed array for multi-buffer draw
-        #colAttachList = [self.leftDrawBuffer, self.rightDrawBuffer]
-        #self.bothDrawBuffers = ctypes.cast(
-         #   (ctypes.c_uint * len(colAttachList))(*colAttachList),
-          #  ctypes.POINTER(ctypes.c_uint))
-
-        # get texture size of render target, some display modes need the render
-        # target to be half the screen size (i.e. spanned window) since aspect
-        # ratio needs to be maintained
-        sizeFBO = self._getFBOSize()
-
-        # create framebuffers for each eye
-        self.leftMSAAFBO, self.leftMSAATexture, self.leftMSAARender = self._setupMultiSampleFBO(
-            self.leftMSAADrawBuffer, sizeFBO[0], sizeFBO[1])
-        self.rightMSAAFBO, self.rightMSAATexture, self.rightMSAARender = self._setupMultiSampleFBO(
-            self.rightMSAADrawBuffer, sizeFBO[0], sizeFBO[1])
-
-        self.leftFBO, self.leftTexture, self.leftRender = self._setupSimpleFBO(
-            self.leftDrawBuffer, sizeFBO[0], sizeFBO[1])
-        self.rightFBO, self.rightTexture, self.rightRender = self._setupSimpleFBO(
-            self.rightDrawBuffer, sizeFBO[0], sizeFBO[1])
-
-        #self.screenFBO, self.screenTexture, self.screenRender = setupFBO(self,
-        #    self.screenDrawBuffer, self._size[0], self._size[1])
+        # init framebuffer objects as render targets
+        self.leftFBO = Framebuffer(self, self.size[0], self.size[1], bpp=16)
+        self.rightFBO = Framebuffer(self, self.size[0], self.size[1], bpp=16)
 
         return True
 
@@ -539,10 +294,6 @@ class MultiRenderWindow(window.Window):
 
         flipThisFrame = self._startOfFlip()
         if flipThisFrame:
-            # set the viewport to span the whole screen are
-            #L.glEnable(GL.GL_SAMPLE_ALPHA_TO_ONE)
-            #self._setSize(fbo=False)
-
             # render the screen texture to the back buffer
             self._prepareFBOrender()
             #if self.bits != None:
@@ -550,9 +301,9 @@ class MultiRenderWindow(window.Window):
             GL.glDisable(GL.GL_BLEND)
             stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
             GL.glDisable(GL.GL_STENCIL_TEST)
-            self._resolveMSAA()
             # unbind the framebuffer as the render target
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
+            GL.glViewport(0, 0, self._size[0], self._size[1])
 
             
             #GL.glDrawBuffer(GL.GL_BACK)
@@ -704,12 +455,10 @@ class MultiRenderWindow(window.Window):
         """
         #GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
         if buffer == 'left':
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.leftMSAAFBO)
-            self._setSize(fbo=True)
+            self.leftFBO.bindFBO()
 
         elif buffer == 'right':
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.rightMSAAFBO)
-            self._setSize(fbo=True)
+            self.rightFBO.bindFBO()
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -722,22 +471,6 @@ class MultiRenderWindow(window.Window):
         """Override with code to configure and execute transfering stereo
         buffers to textures and blitting them to the back buffer."""
         pass
-    
-    def _setSize(self, fbo):
-        """Ensure the size of the FBO is returned when something gets
-        Window.size. A bit of a hack, but will work well for now."""
-
-        if fbo:
-            self.size = self._getFBOSize()
-        else:
-            self.size = self._size
-
-        GL.glViewport(0, 0, self.size[0], self.size[1])
-        GL.glMatrixMode(GL.GL_PROJECTION)
-        GL.glLoadIdentity()
-        GL.glOrtho(-1, 1, -1, 1, -1, 1)
-        GL.glMatrixMode(GL.GL_MODELVIEW)
-        GL.glLoadIdentity()
 
 """
 Below are the stereo window classes that produce various stereo displays. Each
@@ -765,27 +498,27 @@ class SpannedWindow(MultiRenderWindow):
         # use the regular FBO rendering shader
         self._progStereoShader = self._progFBOtoFrame
 
-    def _getFBOSize(self):
-        return numpy.array((int(self._size[0]/2), int(self._size[1])), numpy.int)
-    
     def _prepareFBOrender(self):
         GL.glUseProgram(self._progStereoShader)
 
-    def _resolveMSAA(self):
-        """Blit multisample texture to simple FBO texture for use"""
-        #GL.glViewport(0, 0, self.size[0], self.size[1])
-        self._setSize(fbo=True)
-        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, self.leftFBO)
-        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, self.leftMSAAFBO)
-        GL.glDrawBuffer(self.leftDrawBuffer)    
-        GL.glBlitFramebufferEXT(0, 0, self.size[0], self.size[1], 0, 0, self.size[0], self.size[1], 
-            GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
-        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, self.rightFBO)
-        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, self.rightMSAAFBO)
-        GL.glDrawBuffer(self.rightDrawBuffer)    
-        GL.glBlitFramebufferEXT(0, 0, self.size[0], self.size[1], 0, 0, self.size[0], self.size[1], 
-            GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
-        self._setSize(fbo=False)
+    def _setupStereoFBO(self):
+        """Setup a Frame Buffer Objects to handle offscreen rendering of eye
+        images.
+
+        Reserves the last few color attachments for offscreen drawing. Most
+        modern cards support at least 8 of them so the rest are free for other
+        purposes.
+
+        Each texture gets it's own FBO. This avoids the FBO re-validation the
+        driver must do when switching attachments, leading to increased overhead
+        and latency.
+        """
+
+        # init framebuffer objects as render targets
+        self.leftFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=16)
+        self.rightFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=16)
+
+        return True
     
     def _renderLeftFBO(self):
         GL.glBegin(GL.GL_QUADS)
@@ -814,13 +547,13 @@ class SpannedWindow(MultiRenderWindow):
     def _stereoRender(self):
         # blit left texture on the left side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
         GL.glColorMask(True, True, True, True)
         self._renderLeftFBO()
-
+        
         # blit right texture on the right side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
         GL.glColorMask(True, True, True, True)
         self._renderRightFBO()
 
@@ -848,29 +581,12 @@ class AnaglyphWindow(MultiRenderWindow):
 
     def _stereoRender(self):
         # set the viewport to span the whole screen area
-        self._setSize(fbo=True)
-
         GL.glActiveTexture(GL.GL_TEXTURE1)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftTexture)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
         GL.glActiveTexture(GL.GL_TEXTURE2)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightTexture)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
 
         self._renderFBO()
-
-    def _resolveMSAA(self):
-        """Blit multisample texture to simple FBO texture for use"""
-        #GL.glViewport(0, 0, self.size[0], self.size[1])
-        self._setSize(fbo=True)
-        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, self.leftFBO)
-        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, self.leftMSAAFBO)
-        GL.glDrawBuffer(self.leftDrawBuffer)    
-        GL.glBlitFramebufferEXT(0, 0, self.size[0], self.size[1], 0, 0, self.size[0], self.size[1], 
-            GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
-        GL.glBindFramebufferEXT(GL.GL_DRAW_FRAMEBUFFER_EXT, self.rightFBO)
-        GL.glBindFramebufferEXT(GL.GL_READ_FRAMEBUFFER_EXT, self.rightMSAAFBO)
-        GL.glDrawBuffer(self.rightDrawBuffer)    
-        GL.glBlitFramebufferEXT(0, 0, self.size[0], self.size[1], 0, 0, self.size[0], self.size[1], 
-            GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST)
 
     def _compileStereoShader(self):
         fragShader = '''
