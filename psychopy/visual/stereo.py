@@ -89,6 +89,7 @@ class Framebuffer(object):
         # status check to see if the framebuffer is complete
         status =  GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
         if status !=  GL.GL_FRAMEBUFFER_COMPLETE_EXT:
+            # FBO could be complete, but check if MSAA ready
             if status == GL.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
                 print("cannot create multisample framebuffer")
             
@@ -162,6 +163,9 @@ class Framebuffer(object):
             logging.error("Error in framebuffer activation")
             # UNBIND THE FRAME BUFFER OBJECT THAT WE HAD CREATED
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
+
+            # should hard crash here, you can't do anything with stereo
+            # if this fails
 
         GL.glDisable(GL.GL_TEXTURE_2D)
         # clear the buffers (otherwise the texture memory can contain
