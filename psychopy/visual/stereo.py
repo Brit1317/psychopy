@@ -297,30 +297,22 @@ class MultiRenderWindow(window.Window):
 
         flipThisFrame = self._startOfFlip()
         if flipThisFrame:
-            # render the screen texture to the back buffer
             self._prepareFBOrender()
-            #if self.bits != None:
-            #    self.bits._prepareFBOrender()
+            # need blit the frambuffer object to the actual back buffer
+
+            # unbind the framebuffer as the render target
+            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
             GL.glDisable(GL.GL_BLEND)
             stencilOn = GL.glIsEnabled(GL.GL_STENCIL_TEST)
             GL.glDisable(GL.GL_STENCIL_TEST)
-            # unbind the framebuffer as the render target
-            GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-            GL.glViewport(0, 0, self._size[0], self._size[1])
 
+            if self.bits != None:
+                self.bits._prepareFBOrender()
             
-            #GL.glDrawBuffer(GL.GL_BACK)
-            #if self.bits != None:
-            #    self.bits._prepareFBOrender()
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glEnable(GL.GL_TEXTURE_2D)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-            GL.glColor3f(1.0, 1.0, 1.0)  # glColor multiplies with texture
-            GL.glColorMask(True, True, True, True)
+            GL.glViewport(0, 0, self._size[0], self._size[1])
             self._stereoRender() # call stereo rendering function   
-            GL.glDisable(GL.GL_TEXTURE_2D)
-            GL.glEnable(GL.GL_BLEND)  
 
+            GL.glEnable(GL.GL_BLEND)
             self._finishFBOrender()
 
         # call this before flip() whether FBO was used or not
