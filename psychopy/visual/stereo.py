@@ -26,7 +26,7 @@ class Framebuffer(object):
     OpenGL 2.1+ to work properly. 
     """
 
-    def __init__(self, win, width=800, height=600, bpp=16):
+    def __init__(self, win, width=800, height=600, bpp=32):
         # window pointer 
         self.win = win
 
