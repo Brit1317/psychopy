@@ -62,9 +62,11 @@ class Framebuffer(object):
                            GL.GL_LINEAR)
 
         # configure texture settings
-        if self.bpp == 8:
+        if self.bpp == 24:
+            useBPP = GL.GL_RGB8
+        elif self.bpp == 32:
             useBPP = GL.GL_RGBA8
-        elif self.bpp == 16:
+        else:
             useBPP = GL.GL_RGBA16
 
         GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, useBPP,
@@ -266,9 +268,11 @@ class MultiRenderWindow(window.Window):
         and latency.
         """
 
+        bpp = self.winHandle.context.config.buffer_size
+
         # init framebuffer objects as render targets
-        self.leftFBO = Framebuffer(self, self.size[0], self.size[1], bpp=16)
-        self.rightFBO = Framebuffer(self, self.size[0], self.size[1], bpp=16)
+        self.leftFBO = Framebuffer(self, self.size[0], self.size[1], bpp=bpp)
+        self.rightFBO = Framebuffer(self, self.size[0], self.size[1], bpp=bpp)
 
         return True
 
@@ -513,9 +517,11 @@ class SpannedWindow(MultiRenderWindow):
         and latency.
         """
 
+        bpp = self.winHandle.context.config.buffer_size
+
         # init framebuffer objects as render targets
-        self.leftFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=16)
-        self.rightFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=16)
+        self.leftFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=bpp)
+        self.rightFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=bpp)
 
         return True
     
