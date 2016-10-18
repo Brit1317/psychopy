@@ -188,18 +188,6 @@ class MultiRenderWindow(window.Window):
 
             kwargs['stereo'] = False
         
-        if 'aa_samples' in kwargs:
-            if kwargs['aa_samples'] == None:
-                max_samples = self.getMaxSamples()
-                logging.warning("Multisample level not specified, setting to GL_MAX_SAMPLES"
-                    " = {}".format(max_samples)
-                    )
-                self.aa_samples = max_samples
-            else:
-                self.aa_samples = kwargs['aa_samples']
-
-            del kwargs['aa_samples']
-
         if 'useFBO' in kwargs:
             logging.warning("Using the built-in FBO support is not allowed "
             "when using MultiRenderWindow, disabling."
@@ -207,9 +195,9 @@ class MultiRenderWindow(window.Window):
 
             kwargs['useFBO'] = False
         
-        self._size = kwargs['size']
-        window.Window.__init__(self, *args, **kwargs)
-
+        # init window class
+        super(MultiRenderWindow, self).__init__(*args, **kwargs)
+        
     def getReservedColorAttachments(self):
         return([self.colorAttachmentLeft, self.colorAttachmentRight])
 
@@ -241,6 +229,7 @@ class MultiRenderWindow(window.Window):
         else:
             # compile the stereo shader included in the instancing class
             self._compileStereoShader()
+            self._size = self.size
 
     def _compileStereoShader(self):
         """Compile a stereo shader required for the given stereo mode, this is
