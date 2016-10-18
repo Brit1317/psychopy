@@ -5,11 +5,14 @@ Stereo display wrappers and utilities. Written by Matthew Cutone (2016) with
 code modified from visual.Window by PsychoPy contributers.
 """
 
+# python stdlibs
 import ctypes
 import sys
-import pyglet
+
+# third-party libs
 import numpy
-pyglet.options['debug_gl'] = True
+import pyglet
+pyglet.options['debug_gl'] = False
 GL = pyglet.gl
 
 # PsychoPy imports
@@ -33,7 +36,7 @@ class Framebuffer(object):
         # basic settings
         self.width = width
         self.height = height
-        self.bpp = bpp
+        self.bpp = bpp   # use the correct color buffer depth
 
         # create the framebuffer
         self._initFramebuffer()
@@ -120,7 +123,7 @@ class Framebuffer(object):
     
     def bindFBO(self, finalize=False):
         """Convienence function to bind FBO for read and draw"""
-
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glViewport(0, 0, self.width, self.height)
@@ -149,7 +152,7 @@ class MultiRenderWindow(window.Window):
     Usage:
 
         You can set which eye is the render target by calling the setBuffer()
-        method and specifying either 'left', 'right', or 'both'. Subsiquent draw
+        method and specifying either 'left' or 'right'. Subsiquent draw
         commands will be rendered to that eye. This behaviour is consistent
         across all stereo modes. Below is an example of how this works.
 
