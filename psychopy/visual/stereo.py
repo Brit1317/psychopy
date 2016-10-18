@@ -150,7 +150,7 @@ class MultiRenderWindow(window.Window):
     default visual.Window class.
 
     Usage:
-
+        
         You can set which eye is the render target by calling the setBuffer()
         method and specifying either 'left' or 'right'. Subsiquent draw
         commands will be rendered to that eye. This behaviour is consistent
@@ -226,7 +226,7 @@ class MultiRenderWindow(window.Window):
         else:
             # compile the stereo shader included in the instancing class
             self._compileStereoShader()
-            self._size = self.size
+            self._size = self.size # retain a copy of the fullscreen's size
 
     def _compileStereoShader(self):
         """Compile a stereo shader required for the given stereo mode, this is
@@ -269,7 +269,7 @@ class MultiRenderWindow(window.Window):
         """
         * Copy of window.Window.flip() method with some modifications to better
         utilize the stereo rendering pipeline without the risk of breaking
-        existing experiments. useFBO is prohibitted by the stereo extension
+        existing experiments. useFBO is prohibited by the stereo extension
         and is not tested for or applied here. *
 
         Flip the front and back buffers after drawing everything for your
@@ -281,6 +281,7 @@ class MultiRenderWindow(window.Window):
         back buffer so it does not need to be cleared.
         """
 
+        # NB - This is broken when using stereo displays
         for thisStim in self._toDraw:
             thisStim.draw()
 
@@ -471,11 +472,15 @@ class SpannedWindow(MultiRenderWindow):
     This is intended to provide multi-monitor support for extended desktop modes
     like Surround, TwinView, and Xinerama. This is the perfered method for 
     multi-display stereo. However, this is only supported on Windows and Linux 
-    with the supported drivers and configuration. 
+    with the supported drivers and configuration.
+
+    Use relfected=True when using a single reflection display, such as a mirror
+    stereoscope.
     """
 
     def __init__(self, *args, **kwargs):
-        # custom flags
+        self.reflected = kwargs.pop('reflected', False)
+        
         MultiRenderWindow.__init__(self, *args, **kwargs)
 
     def _compileStereoShader(self):
@@ -517,6 +522,8 @@ class SpannedWindow(MultiRenderWindow):
         GL.glTexCoord2f(1.0, 0.0)
         GL.glVertex2f(0.0, -1.0)
         GL.glEnd()
+
+        GL.glLoadIdentity()
     
     def _renderRightFBO(self):
         GL.glBegin(GL.GL_QUADS)
@@ -531,17 +538,33 @@ class SpannedWindow(MultiRenderWindow):
         GL.glEnd()
 
     def _stereoRender(self):
+
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        # apply reflection if using a mirror stereoscope
+        if self.reflected:
+            GL.glLoadIdentity()
+            GL.glScalef(-1, 1, 1)
+
         # blit left texture on the left side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
         GL.glColorMask(True, True, True, True)
         self._renderLeftFBO()
-        
+
+        GL.glLoadIdentity()
+
+        # apply reflection if using a mirror stereoscope
+        if self.reflected:
+            GL.glLoadIdentity()
+            GL.glScalef(-1, 1, 1)
+
         # blit right texture on the right side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
         GL.glColorMask(True, True, True, True)
         self._renderRightFBO()
+
+        GL.glLoadIdentity()
 
 class AnaglyphWindow(MultiRenderWindow):
 
@@ -566,7 +589,6 @@ class AnaglyphWindow(MultiRenderWindow):
             "rightEyeTexture"), 2)
 
     def _stereoRender(self):
-        # set the viewport to span the whole screen area
         GL.glActiveTexture(GL.GL_TEXTURE1)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
         GL.glActiveTexture(GL.GL_TEXTURE2)
