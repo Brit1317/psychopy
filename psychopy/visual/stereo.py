@@ -197,9 +197,6 @@ class MultiRenderWindow(window.Window):
         
         # init window class
         super(MultiRenderWindow, self).__init__(*args, **kwargs)
-        
-    def getReservedColorAttachments(self):
-        return([self.colorAttachmentLeft, self.colorAttachmentRight])
 
     def _endOfFlip(self, clearBuffer):
         """
