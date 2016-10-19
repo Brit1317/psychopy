@@ -123,7 +123,6 @@ class Framebuffer(object):
     
     def bindFBO(self, finalize=False):
         """Convienence function to bind FBO for read and draw"""
-        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glViewport(0, 0, self.width, self.height)
@@ -135,6 +134,7 @@ class Framebuffer(object):
         GL.glViewport(0, 0, self.win.size[0], self.win.size[1])
     
     def clearBuffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glClear(buffer)
 
 class MultiRenderWindow(window.Window):
@@ -432,13 +432,12 @@ class MultiRenderWindow(window.Window):
         if self.waitBlanking is True:
             return now
 
-    def setBuffer(self, buffer='left', clear=True):
+    def setBuffer(self, buffer='left', clear=False):
         """
         Similar to setBuffer in Window, but changes the active eye FBO
         instead of the back quad-buffer. Buffers can be cleared individually
         if needed.
         """
-        #GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
         if buffer == 'left':
             self.leftFBO.bindFBO()
 
@@ -449,7 +448,6 @@ class MultiRenderWindow(window.Window):
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
     
     def _finishFBOrender(self):
-        #GL.glEnable(GL.GL_MULTISAMPLE)
         GL.glUseProgram(0)
 
     def _stereoRender(self):
@@ -491,18 +489,6 @@ class SpannedWindow(MultiRenderWindow):
         GL.glUseProgram(self._progStereoShader)
 
     def _setupStereoFBO(self):
-        """Setup a Frame Buffer Objects to handle offscreen rendering of eye
-        images.
-
-        Reserves the last few color attachments for offscreen drawing. Most
-        modern cards support at least 8 of them so the rest are free for other
-        purposes.
-
-        Each texture gets it's own FBO. This avoids the FBO re-validation the
-        driver must do when switching attachments, leading to increased overhead
-        and latency.
-        """
-
         bpp = self.winHandle.context.config.buffer_size
 
         # init framebuffer objects as render targets
@@ -538,7 +524,6 @@ class SpannedWindow(MultiRenderWindow):
         GL.glEnd()
 
     def _stereoRender(self):
-
         # blit left texture on the left side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
