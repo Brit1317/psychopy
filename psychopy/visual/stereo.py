@@ -539,32 +539,38 @@ class SpannedWindow(MultiRenderWindow):
 
     def _stereoRender(self):
 
-        GL.glMatrixMode(GL.GL_MODELVIEW)
-        # apply reflection if using a mirror stereoscope
-        if self.reflected:
-            GL.glLoadIdentity()
-            GL.glScalef(-1, 1, 1)
-
         # blit left texture on the left side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
         GL.glColorMask(True, True, True, True)
-        self._renderLeftFBO()
-
-        GL.glLoadIdentity()
 
         # apply reflection if using a mirror stereoscope
         if self.reflected:
+            GL.glMatrixMode(GL.GL_MODELVIEW)
             GL.glLoadIdentity()
+            GL.glPushMatrix()
             GL.glScalef(-1, 1, 1)
+            self._renderRightFBO() # use the right FBO quad
+            GL.glPopMatrix()
+            GL.glLoadIdentity()
+        else:
+            self._renderLeftFBO()
 
         # blit right texture on the right side of screen
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
         GL.glColorMask(True, True, True, True)
-        self._renderRightFBO()
 
-        GL.glLoadIdentity()
+        if self.reflected:
+            GL.glMatrixMode(GL.GL_MODELVIEW)
+            GL.glLoadIdentity()
+            GL.glPushMatrix()
+            GL.glScalef(-1, 1, 1)
+            self._renderLeftFBO() # use the left FBO quad
+            GL.glPopMatrix()
+            GL.glLoadIdentity()
+        else:
+            self._renderRightFBO()
 
 class AnaglyphWindow(MultiRenderWindow):
 
