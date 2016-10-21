@@ -29,14 +29,12 @@ class Framebuffer(object):
     OpenGL 2.1+ to work properly. 
     """
 
-    def __init__(self, win, width=800, height=600, bpp=32):
+    def __init__(self, win, size=(800,600)):
         # window pointer 
         self.win = win
 
         # basic settings
-        self.width = width
-        self.height = height
-        self.bpp = bpp   # use the correct color buffer depth
+        self.fbo_size = numpy.array(size, numpy.int)
 
         # create the framebuffer
         self._initFramebuffer()
@@ -57,30 +55,17 @@ class Framebuffer(object):
         self.textureId = GL.GLuint()
         GL.glGenTextures(1, ctypes.byref(self.textureId))
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D,
-                           GL.GL_TEXTURE_MAG_FILTER,
-                           GL.GL_LINEAR)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D,
-                           GL.GL_TEXTURE_MIN_FILTER,
-                           GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
+            GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, 
+            GL.GL_LINEAR)
 
-        # configure texture settings
-        if self.bpp == 24:
-            useBPP = GL.GL_RGB8
-        elif self.bpp == 32:
-            useBPP = GL.GL_RGBA8
-        else:
-            useBPP = GL.GL_RGBA16
-
-        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, useBPP,
-                        int(self.width), int(self.height), 0,
-                        GL.GL_RGBA, GL.GL_FLOAT, None)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16, self.fbo_size[0], 
+            self.fbo_size[1], 0, GL.GL_RGBA, GL.GL_FLOAT, None)
 
         # attach texture to the frame buffer
-        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT,
-                                     GL.GL_COLOR_ATTACHMENT0_EXT,
-                                     GL.GL_TEXTURE_2D, 
-                                     self.textureId, 0)
+        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, 
+            GL.GL_COLOR_ATTACHMENT0_EXT, GL.GL_TEXTURE_2D, self.textureId, 0)
         
         # clear buffers
         GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
@@ -92,13 +77,11 @@ class Framebuffer(object):
         GL.glGenRenderbuffersEXT(1, ctypes.byref(
             self.renderBufferId))  # like glGenTextures
         GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, self.renderBufferId)
-        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
-                                    GL.GL_DEPTH24_STENCIL8_EXT,
-                                    int(self.width), int(self.height))
-        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
-                                        GL.GL_STENCIL_ATTACHMENT_EXT,
-                                        GL.GL_RENDERBUFFER_EXT,
-                                        self.renderBufferId)
+        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT, 
+            GL.GL_DEPTH24_STENCIL8_EXT, self.fbo_size[0], self.fbo_size[1])
+        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT, 
+            GL.GL_STENCIL_ATTACHMENT_EXT, GL.GL_RENDERBUFFER_EXT,
+            self.renderBufferId)
 
         status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
         if status != GL.GL_FRAMEBUFFER_COMPLETE_EXT:
@@ -125,13 +108,12 @@ class Framebuffer(object):
         """Convienence function to bind FBO for read and draw"""
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
-        GL.glViewport(0, 0, self.width, self.height)
-        self.win.size = [self.width, self.height]
+        GL.glViewport(0, 0, self.fbo_size[0], self.fbo_size[1])
+        self.win.size = self.fbo_size
     
     def unbindFBO(self, toTarget=0):
         """Unbind to default framebuffer to default (0)"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, toTarget)
-        GL.glViewport(0, 0, self.win.size[0], self.win.size[1])
     
     def clearBuffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
@@ -257,11 +239,9 @@ class MultiRenderWindow(window.Window):
         and latency.
         """
 
-        bpp = self.winHandle.context.config.buffer_size
-
         # init framebuffer objects as render targets
-        self.leftFBO = Framebuffer(self, self.size[0], self.size[1], bpp=bpp)
-        self.rightFBO = Framebuffer(self, self.size[0], self.size[1], bpp=bpp)
+        self.leftFBO = Framebuffer(self, (self.size[0], self.size[1]))
+        self.rightFBO = Framebuffer(self, (self.size[0], self.size[1]))
 
         return True
 
@@ -489,11 +469,9 @@ class SpannedWindow(MultiRenderWindow):
         GL.glUseProgram(self._progStereoShader)
 
     def _setupStereoFBO(self):
-        bpp = self.winHandle.context.config.buffer_size
-
         # init framebuffer objects as render targets
-        self.leftFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=bpp)
-        self.rightFBO = Framebuffer(self, self.size[0]/2, self.size[1], bpp=bpp)
+        self.leftFBO = Framebuffer(self, (self.size[0]/2, self.size[1]))
+        self.rightFBO = Framebuffer(self, (self.size[0]/2, self.size[1]))
 
         return True
     
