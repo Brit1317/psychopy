@@ -47,7 +47,21 @@ class Framebuffer(object):
         self._initFramebuffer()
     
     def __repr__(self):
+        """Return the framebuffer handle ID when called"""
         return self.frameBufferId
+    
+    def __del__(self):
+        """Delete the framebuffer and attached resources"""
+        # check if a color and render buffers have valid IDs (non-zero), if so, 
+        # delete them
+        if self.frameBufferId:
+            GL.glDeleteTextures(1, ctypes.byref(self.textureId))
+        if self.renderBufferId:
+            GL.glDeleteRenderbuffersEXT(1, ctypes.byref(self.renderBufferIdb))
+        
+        # discard the framebuffer to free up resources
+        GL.glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
+        GL.glDeleteFramebuffersEXT(1, ctypes.byref(self.frameBufferId))
     
     def _initFramebuffer(self):
         """Setup frambuffer object for off-screen rendering. Setup is much like 
