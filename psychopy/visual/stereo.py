@@ -467,10 +467,88 @@ quad-buffer enabled through the GL_STEREO extension, use the stereo=True
 option included in the vanilla Window class.
 """
 
-class SpannedWindow(MultiRenderWindow):
+class PackedWindow(MultiRenderWindow):
 
     """Create a display where left and right eye images are packed horizontally
-    preserving the aspect ratio of the image.
+    or vertically.
+
+    Set 'packing' to 'horizontal' (Left-Right) or 'vertical' (Top-Bottom),
+    default is horizontal. 
+    """
+
+    def __init__(self, *args, **kwargs):
+        
+        self.packing = kwargs.pop('packing', 'horizontal')
+
+        if self.packing not in ('horizontal', 'vertical'):
+            # error, not valid packing mode specified
+            logging.warning('Requested packing mode {} is invalid, defaulting'
+                            'to horizontal')
+            self.packing = 'horizontal'
+
+        MultiRenderWindow.__init__(self, *args, **kwargs)
+
+    def _renderLeftFBO(self):
+        if self.packing == 'horizontal':
+            GL.glBegin(GL.GL_QUADS)
+            GL.glTexCoord2f(0.0, 0.0)
+            GL.glVertex2f(-1.0, -1.0)
+            GL.glTexCoord2f(0.0, 1.0)
+            GL.glVertex2f(-1.0, 1.0)
+            GL.glTexCoord2f(1.0, 1.0)
+            GL.glVertex2f(0.0, 1.0)
+            GL.glTexCoord2f(1.0, 0.0)
+            GL.glVertex2f(0.0, -1.0)
+            GL.glEnd()
+        elif self.packing == 'vertical':
+            GL.glBegin(GL.GL_QUADS)
+            GL.glTexCoord2f(0.0, 0.0)
+            GL.glVertex2f(-1.0, 0.0)
+            GL.glTexCoord2f(0.0, 1.0)
+            GL.glVertex2f(-1.0, 1.0)
+            GL.glTexCoord2f(1.0, 1.0)
+            GL.glVertex2f(1.0, 1.0)
+            GL.glTexCoord2f(1.0, 0.0)
+            GL.glVertex2f(1.0, 0.0)
+            GL.glEnd()
+    
+    def _renderRightFBO(self):
+        if self.packing == 'horizontal':
+            GL.glBegin(GL.GL_QUADS)
+            GL.glTexCoord2f(0.0, 0.0)
+            GL.glVertex2f(0.0, -1.0)
+            GL.glTexCoord2f(0.0, 1.0)
+            GL.glVertex2f(0.0, 1.0)
+            GL.glTexCoord2f(1.0, 1.0)
+            GL.glVertex2f(1.0, 1.0)
+            GL.glTexCoord2f(1.0, 0.0)
+            GL.glVertex2f(1.0, -1.0)
+            GL.glEnd()
+        elif self.packing == 'vertical':
+            GL.glBegin(GL.GL_QUADS)
+            GL.glTexCoord2f(0.0, 0.0)
+            GL.glVertex2f(-1.0, -1.0)
+            GL.glTexCoord2f(0.0, 1.0)
+            GL.glVertex2f(-1.0, 0.0)
+            GL.glTexCoord2f(1.0, 1.0)
+            GL.glVertex2f(1.0, 0.0)
+            GL.glTexCoord2f(1.0, 0.0)
+            GL.glVertex2f(1.0, -1.0)
+            GL.glEnd()
+
+    def _stereoRender(self):
+        self.leftFBO.bindTexture(GL.GL_TEXTURE0)
+        self._renderLeftFBO()
+        self.leftFBO.unbindTexture()
+
+        self.rightFBO.bindTexture(GL.GL_TEXTURE0)
+        self._renderRightFBO()
+        self.rightFBO.unbindTexture()
+
+class SpannedWindow(MultiRenderWindow):
+
+    """Create a display where left and right eye images are packed horizontally,
+    preserving the aspect ratio.
 
     This is intended to provide multi-monitor support for extended desktop modes
     like Surround, TwinView, and Xinerama. This is the perfered method for 
@@ -483,15 +561,7 @@ class SpannedWindow(MultiRenderWindow):
 
     def __init__(self, *args, **kwargs):
         self.reflected = kwargs.pop('reflected', False)
-        
         MultiRenderWindow.__init__(self, *args, **kwargs)
-
-    def _compileStereoShader(self):
-        # use the regular FBO rendering shader
-        self._progStereoShader = self._progFBOtoFrame
-
-    def _prepareFBOrender(self):
-        GL.glUseProgram(self._progStereoShader)
 
     def _setupStereoFBO(self):
         # init framebuffer objects as render targets.
