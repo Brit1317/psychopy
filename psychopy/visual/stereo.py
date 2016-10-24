@@ -22,36 +22,43 @@ from .. import platform_specific
 from .. import logging
 from . import globalVars
 
-reportNDroppedFrames = 5  # stop raising warning after this
+reportNDroppedFrames = 5
 
 class Framebuffer(object):
-    """Abstracted off-screen rendering targets for stereo renderings. Requires
-    OpenGL 2.1+ to work properly. 
+    """Class for generating and managing off-screen render target. 
     """
 
     def __init__(self, win, size=(800,600)):
+        """Framebuffer Objects provide a means of rendering stimuli off-screen
+        to textures. These textures can be filtered by programmable GPU shaders 
+        or applied to quads for blitting and warping.
+
+        Framebuffers generated from this class have a single color and render 
+        buffer by default. The color buffer has a single attachment at 
+        GL_COLOR_ATTACHMENT0_EXT with a GL_RGBA16 internal format. The texture
+        can be accessed by its handle 'textureId'.
+        """
+
         # window pointer 
         self.win = win
-
-        # basic settings
         self.fbo_size = numpy.array(size, numpy.int)
 
-        # create the framebuffer
+        # create the framebuffer, must succeed or crash
         self._initFramebuffer()
     
     def __repr__(self):
         return self.frameBufferId
     
     def _initFramebuffer(self):
-        """Setup frambuffer object for off-screen rendering without multi-sampling.
-        Setup is much like that in the window.Window class."""
+        """Setup frambuffer object for off-screen rendering. Setup is much like 
+        that in the window.Window class."""
 
-        # create FBO
+        # get a new framebuffer reference handle
         self.frameBufferId = GL.GLuint()
         GL.glGenFramebuffersEXT(1, ctypes.byref(self.frameBufferId))
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
 
-        # Create texture to render to
+        # create a texture to behave as a render target
         self.textureId = GL.GLuint()
         GL.glGenTextures(1, ctypes.byref(self.textureId))
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
@@ -59,34 +66,35 @@ class Framebuffer(object):
             GL.GL_LINEAR)
         GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, 
             GL.GL_LINEAR)
-
         GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16, self.fbo_size[0], 
             self.fbo_size[1], 0, GL.GL_RGBA, GL.GL_FLOAT, None)
-
-        # attach texture to the frame buffer
         GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, 
             GL.GL_COLOR_ATTACHMENT0_EXT, GL.GL_TEXTURE_2D, self.textureId, 0)
         
-        # clear buffers
+        # clear the colour attachment
         GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
                             
-        # add a stencil buffer
+        # create and attach a renderbuffer
         self.renderBufferId = GL.GLuint()
         GL.glGenRenderbuffersEXT(1, ctypes.byref(
-            self.renderBufferId))  # like glGenTextures
+            self.renderBufferId))
         GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, self.renderBufferId)
         GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT, 
             GL.GL_DEPTH24_STENCIL8_EXT, self.fbo_size[0], self.fbo_size[1])
         GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT, 
             GL.GL_STENCIL_ATTACHMENT_EXT, GL.GL_RENDERBUFFER_EXT,
             self.renderBufferId)
+        
+        # clear depth and stencil buffer
+        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
+        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
+        # check if the framebuffer has been successfully initalized
         status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
         if status != GL.GL_FRAMEBUFFER_COMPLETE_EXT:
             logging.error("Error in framebuffer activation")
-            # UNBIND THE FRAME BUFFER OBJECT THAT WE HAD CREATED
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
 
             # should hard crash here, you can't do anything with stereo
@@ -95,14 +103,15 @@ class Framebuffer(object):
             return None
 
         GL.glDisable(GL.GL_TEXTURE_2D)
-        # clear the buffers (otherwise the texture memory can contain
-        # junk from other app)
-        #GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-        GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
-        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
     def bindTexture(self, where=GL.GL_TEXTURE0):
-        pass
+        """Bind the FBO texture to a given texture unit"""
+        GL.glActiveTexture(where)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
+        GL.glColorMask(True, True, True, True)
+    
+    def unbindTexture(self, toTarget=0):
+        GL.glBindTexture(GL.GL_TEXTURE_2D, toTarget)
     
     def bindFBO(self, finalize=False):
         """Convienence function to bind FBO for read and draw"""
@@ -116,12 +125,14 @@ class Framebuffer(object):
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, toTarget)
     
     def clearBuffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
+        """Clear the specified FBO attachment/buffer"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glClear(buffer)
 
 class MultiRenderWindow(window.Window):
 
-    """
+    """Class for rendering stereoscopic scenes using multiple Framebuffers.
+    
     Main support class for stereo modes that require off screen rendering for
     each eye's image; intended to provide alternative stereo display modes and
     stereo support for systems that do not support the GL_STEREO extension.
@@ -449,11 +460,11 @@ class SpannedWindow(MultiRenderWindow):
 
     This is intended to provide multi-monitor support for extended desktop modes
     like Surround, TwinView, and Xinerama. This is the perfered method for 
-    multi-display stereo. However, this is only supported on Windows and Linux 
-    with the supported drivers and configuration.
+    multi-display stereo. However, it is only supported on Windows and Linux 
+    with the appropriate driver configuration.
 
-    Use relfected=True when using a single reflection display, such as a mirror
-    stereoscope.
+    Use relfected=True if the image is reflected off a mirror, such as in a 
+    mirror stereoscope.
     """
 
     def __init__(self, *args, **kwargs):
@@ -469,7 +480,10 @@ class SpannedWindow(MultiRenderWindow):
         GL.glUseProgram(self._progStereoShader)
 
     def _setupStereoFBO(self):
-        # init framebuffer objects as render targets
+        # init framebuffer objects as render targets.
+        # for this display mode, the framebuffers have half the horizontal 
+        # resolution of the entire display.
+
         self.leftFBO = Framebuffer(self, (self.size[0]/2, self.size[1]))
         self.rightFBO = Framebuffer(self, (self.size[0]/2, self.size[1]))
 
@@ -502,10 +516,8 @@ class SpannedWindow(MultiRenderWindow):
         GL.glEnd()
 
     def _stereoRender(self):
-        # blit left texture on the left side of screen
-        GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
-        GL.glColorMask(True, True, True, True)
+        # blit left texture to the left side of screen
+        self.leftFBO.bindTexture(GL.GL_TEXTURE0)
 
         # apply reflection if using a mirror stereoscope
         if self.reflected:
@@ -518,11 +530,11 @@ class SpannedWindow(MultiRenderWindow):
             GL.glLoadIdentity()
         else:
             self._renderLeftFBO()
+        
+        self.leftFBO.unbindTexture()
 
-        # blit right texture on the right side of screen
-        GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
-        GL.glColorMask(True, True, True, True)
+        # blit right texture to the right side of screen
+        self.rightFBO.bindTexture(GL.GL_TEXTURE0)
 
         if self.reflected:
             GL.glMatrixMode(GL.GL_MODELVIEW)
@@ -534,6 +546,8 @@ class SpannedWindow(MultiRenderWindow):
             GL.glLoadIdentity()
         else:
             self._renderRightFBO()
+        
+        self.rightFBO.unbindTexture()
 
 class AnaglyphWindow(MultiRenderWindow):
 
@@ -558,10 +572,8 @@ class AnaglyphWindow(MultiRenderWindow):
             "rightEyeTexture"), 2)
 
     def _stereoRender(self):
-        GL.glActiveTexture(GL.GL_TEXTURE1)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.leftFBO.textureId)
-        GL.glActiveTexture(GL.GL_TEXTURE2)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.rightFBO.textureId)
+        self.leftFBO.bindTexture(GL.GL_TEXTURE1)
+        self.rightFBO.bindTexture(GL.GL_TEXTURE2)
 
         self._renderFBO()
 
