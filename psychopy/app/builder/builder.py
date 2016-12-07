@@ -66,6 +66,7 @@ _localized = {
     #contextMenuLabels
     'edit': _translate('edit'),
     'remove': _translate('remove'),
+    'copy': _translate('copy'),
     'move to top': _translate('move to top'),
     'move up': _translate('move up'),
     'move down': _translate('move down'),
@@ -121,7 +122,8 @@ class RoutineCanvas(wx.ScrolledWindow):
         self.lastpos = (0, 0)
         # use the ID of the drawn icon to retrieve component name:
         self.componentFromID = {}
-        self.contextMenuItems = ['edit', 'remove', 'move to top', 'move up',
+        self.contextMenuItems = ['copy', 'edit', 'remove',
+                                 'move to top', 'move up',
                                  'move down', 'move to bottom']
         # labels are only for display, and allow localization
         self.contextMenuLabels = {k: _localized[k]
@@ -203,6 +205,8 @@ class RoutineCanvas(wx.ScrolledWindow):
         r = self.routine
         if op == 'edit':
             self.editComponentProperties(component=component)
+        elif op == 'copy':
+            self.copyCompon(component=component)
         elif op == 'remove':
             r.removeComponent(component)
             self.frame.addToUndoStack(
@@ -457,6 +461,37 @@ class RoutineCanvas(wx.ScrolledWindow):
             # update bounds to include time bar
             fullRect.Union(wx.Rect(xSt, y + yOffset, w, h))
         dc.SetIdBounds(id, fullRect)
+
+    def copyCompon(self, event=None, component=None):
+        """This is easy - just take a copy of the component into memory
+        """
+        self.app.copiedCompon = copy.deepcopy(component)
+
+    def pasteCompon(self, event=None, component=None):
+        if not self.app.copiedCompon:
+            return -1  #not possible to paste if nothing copied
+        exp = self.frame.exp
+        origName = self.app.copiedCompon.params['name'].val
+        defaultName = exp.namespace.makeValid(origName)
+        msg = _translate('New name for copy of "%(copied)s"?  [%(default)s]')
+        vals = {'copied': origName, 'default': defaultName}
+        message = msg % vals
+        dlg = wx.TextEntryDialog(self, message=message,
+                                 caption=_translate('Paste Component'))
+        if dlg.ShowModal() == wx.ID_OK:
+            newName = dlg.GetValue()
+            newCompon = copy.deepcopy(self.app.copiedCompon)
+            if not newName:
+                newName = defaultName
+            newName = exp.namespace.makeValid(newName)
+            newCompon.params['name'].val = newName
+            if 'name' in dir(newCompon):
+                newCompon.name = newName
+            self.routine.addComponent(newCompon)
+            # could do redrawRoutines but would be slower?
+            self.redrawRoutine()
+            self.frame.addToUndoStack("PASTE Component `%s`" % newName)
+        dlg.Destroy()
 
     def editComponentProperties(self, event=None, component=None):
         # we got here from a wx.button press (rather than our own drawn icons)
@@ -1197,7 +1232,7 @@ class BuilderFrame(wx.Frame):
             _translate("Save current experiment file as..."))
         menu.Append(
             self.IDs.fileExport,
-            _translate("Export HTML..."),
+            _translate("Export HTML...\t%s") % keys['exportHTML'],
             _translate("Export experiment to html/javascript file"))
         menu.Append(
             wx.ID_CLOSE,
@@ -1279,8 +1314,8 @@ class BuilderFrame(wx.Frame):
         item = menu.Append(wx.ID_ANY,
                     _translate("&Open Coder view\t%s") % keys['switchToCoder'],
                     _translate("Open a new Coder view"))
-        wx.EVT_MENU(self,item.GetId(), self.app.showCoder)
-        item = menu.Append(self.IDs.toggleReadme,
+        wx.EVT_MENU(self, item.GetId(), self.app.showCoder)
+        item = menu.Append(wx.ID_ANY,
                     _translate(
                         "&Toggle readme\t%s") % self.app.keys['toggleReadme'],
                     _translate("Toggle Readme"))
@@ -1313,36 +1348,42 @@ class BuilderFrame(wx.Frame):
         self.expMenu = wx.Menu()
         menuBar.Append(self.expMenu, _translate('&Experiment'))
         menu = self.expMenu
-        menu.Append(self.IDs.newRoutine,
+        item = menu.Append(wx.ID_ANY,
                     _translate("&New Routine\t%s") % keys['newRoutine'],
                     _translate("Create a new routine (e.g. the trial "
                                "definition)"))
         wx.EVT_MENU(self, self.IDs.newRoutine, self.addRoutine)
-        menu.Append(self.IDs.copyRoutine,
+        item = menu.Append(wx.ID_ANY,
                     _translate("&Copy Routine\t%s") % keys['copyRoutine'],
                     _translate("Copy the current routine so it can be used"
                                " in another exp"),
                     wx.ITEM_NORMAL)
         wx.EVT_MENU(self, self.IDs.copyRoutine, self.onCopyRoutine)
-        menu.Append(self.IDs.pasteRoutine,
+        item = menu.Append(wx.ID_ANY,
                     _translate("&Paste Routine\t%s") % keys['pasteRoutine'],
                     _translate("Paste the Routine into the current "
                                "experiment"),
                     wx.ITEM_NORMAL)
         wx.EVT_MENU(self, self.IDs.pasteRoutine, self.onPasteRoutine)
-        menu.Append(self.IDs.renameRoutine,
+        item = menu.Append(wx.ID_ANY,
                     _translate("&Rename Routine\t%s") % keys['renameRoutine'],
                     _translate("Change the name of this routine"))
         wx.EVT_MENU(self, self.IDs.renameRoutine, self.renameRoutine)
+        item = menu.Append(wx.ID_ANY,
+                    _translate("Paste Component\t%s") % keys['pasteCompon'],
+                    _translate("Paste the Component at bottom of the current "
+                               "Routine"),
+                    wx.ITEM_NORMAL)
+        wx.EVT_MENU(self, item.GetId(), self.onPasteCompon)
         menu.AppendSeparator()
 
-        menu.Append(self.IDs.addRoutineToFlow,
+        item = menu.Append(wx.ID_ANY,
                     _translate("Insert Routine in Flow"),
                     _translate("Select one of your routines to be inserted"
                                " into the experiment flow"))
         wx.EVT_MENU(self, self.IDs.addRoutineToFlow,
                     self.flowPanel.onInsertRoutine)
-        menu.Append(self.IDs.addLoopToFlow,
+        item = menu.Append(wx.ID_ANY,
                     _translate("Insert Loop in Flow"),
                     _translate("Create a new loop in your flow window"))
         wx.EVT_MENU(self, self.IDs.addLoopToFlow, self.flowPanel.insertLoop)
@@ -1562,26 +1603,30 @@ class BuilderFrame(wx.Frame):
         self.updateWindowTitle()
         return returnVal
 
-    def fileExport(self, event=None, htmlPath=""):
+    def fileExport(self, event=None, htmlPath=None):
         """Exports the script as an HTML file (PsychoJS library)
         """
         # get path if not given one
-        if htmlPath == "":
-            htmlPath = os.path.splitext(self.filename)[0] + ".html"
-            dlg = ExportFileDialog(self, -1, title="Export HTML file",
-                                   filePath=htmlPath)
-            retVal = dlg.ShowModal()
-            if retVal == wx.ID_OK:
-                htmlPath = dlg.filePath.GetValue()
-                if dlg.exportOnSave.GetValue():
-                    self.htmlPath = htmlPath  # this will be checked and used
-            else:
-                return  # nothing more to do here, move along
+        settingsHTMLpath = self.exp.settings.params['HTML path'].val
+        if htmlPath is None and self.exp.settings.params['HTML path']:
+
+            expPath = os.path.split(self.filename)[0]
+            htmlPath = os.path.join(expPath, settingsHTMLpath)
+        # present dialog box
+        dlg = ExportFileDialog(self, -1, title="Export HTML file",
+                               filePath=htmlPath)
+        retVal = dlg.ShowModal()
+        if retVal == wx.ID_OK:
+            htmlPath = dlg.filePath.GetValue()
+            if dlg.exportOnSave.GetValue():
+                self.htmlPath = htmlPath  # this will be checked and used
+        else:
+            return  # nothing more to do here, move along
         # then save the actual script
-        script = self.generateScript(experimentPath=htmlPath,
+        indexHTML = self.generateScript(experimentPath=htmlPath,
                                      target="PsychoJS")
-        f = codecs.open(htmlPath, 'wb', 'utf-8')
-        f.write(script.getvalue())
+        f = codecs.open(os.path.join(htmlPath,'index.html'), 'wb', 'utf-8')
+        f.write(indexHTML.getvalue())
         f.close()
 
     def getShortFilename(self):
@@ -2018,6 +2063,14 @@ class BuilderFrame(wx.Frame):
             self.addToUndoStack("PASTE Routine `%s`" % newRoutine.name)
         dlg.Destroy()
 
+    def onPasteCompon(self, event=None):
+        """
+        Paste the copied Component (if there is one) into the current
+        Routine
+        """
+        routinePage = self.routinePanel.getCurrentPage()
+        routinePage.pasteCompon()
+
     def onURL(self, evt):
         """decompose the URL of a file and line number"""
         # "C:\Program Files\wxPython...\samples\hangman\hangman.py"
@@ -2207,7 +2260,7 @@ class ReadmeFrame(wx.Frame):
 class ExportFileDialog(wx.Dialog):
     def __init__(
             self, parent, ID, title, size=wx.DefaultSize,
-            pos=wx.DefaultPosition, style=wx.DEFAULT_DIALOG_STYLE, filePath=""
+            pos=wx.DefaultPosition, style=wx.DEFAULT_DIALOG_STYLE, filePath=None
             ):
 
         wx.Dialog.__init__(self, parent, ID, title,
@@ -2225,10 +2278,10 @@ class ExportFileDialog(wx.Dialog):
 
         box = wx.BoxSizer(wx.HORIZONTAL)
 
-        label = wx.StaticText(self, -1, "Filepath:")
+        label = wx.StaticText(self, -1, "Filepath (relative to psyexp):")
         box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
         self.filePath = wx.TextCtrl(self, -1, filePath, size=(200, -1))
-        self.filePath.SetHelpText("The path to store the HTML file")
+        self.filePath.SetHelpText("The folder to store the HTML files")
         box.Add(self.filePath, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
 
         sizer.Add(box, 0, wx.GROW | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
@@ -2237,7 +2290,9 @@ class ExportFileDialog(wx.Dialog):
 
         self.exportOnSave = wx.CheckBox(self, -1,
                                         label="Continuously export on save")
+        self.exportOnSave.Disable()
         self.exportOnSave.SetHelpText(
+            "[NOT implemented yet]"
             "Tick this if you want the HTML file to export"
             " (and overwrite) on every save of the experiment."
             " Only works for THIS SESSION.")

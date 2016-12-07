@@ -53,19 +53,20 @@ We'll provide you with additional 'intermediate' material as well, for you to bu
 Schedule
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Some sessions will be self-paced (shown in green). We'll not start the first formal session until 10am on Day 1 (coffee available from 9am though) and we'll finish at 4pm on Day 3 to allow some travel flexibility. But you are welcome to hang around and continue working if you prefer.
+We'll not start the first formal session until 10am on Day 1 (coffee available from 9am though) and we'll finish at 4pm on Day 3 to allow some travel flexibility. But you are welcome to hang around and continue working if you prefer.
 
-[All sessions subject to change]
+All sessions subject to change. Sessions in **green** and **blue** are optional (for self-paced and specialist sessions, respectively).
 
-.. image:: ../images/scheduleBeginner.png
-   :scale: 80 %
+.. image:: schedulePEP1.png
+   :scale: 70 %
+   :align: center
 
 .. _BEP:
 
 BEP: Building Experiments in PsychoPy
 ---------------------------------------------------------
 
-`Book onto Building Experiments in PsychoPy workshop now <http://store.nottingham.ac.uk/browse/extra_info.asp?compid=1&modid=2&deptid=9&catid=49&prodid=787>`_`
+`Book onto Building Experiments in PsychoPy workshop now <http://store.nottingham.ac.uk/browse/extra_info.asp?compid=1&modid=2&deptid=9&catid=49&prodid=787>`_
 
 Learning to *Build* experiments is the fastest way to get studies up and running. You can do an awful lot with a graphical interface and some bits of Python code plugged in to do the fancy stuff! That's what we'll be learning here.
 
@@ -88,8 +89,13 @@ This workshop is suitable for beginners and those that don't want to learn subst
 Schedule
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The schedule isn't finalised yet but there will be time over the three days to learn some material in formal taught sessions as well as some periods where you can develop your own studies.
+We'll not start the first formal session until 10am on Day 1 (coffee available from 9am though) and we'll finish at 4pm on Day 3 to allow some travel flexibility. But you are welcome to hang around and continue working if you prefer.
 
+All sessions subject to change. Sessions in **green** and **blue** are optional (for self-paced and specialist sessions, respectively).
+
+.. image:: scheduleBEP.png
+   :scale: 70 %
+   :align: center
 
 .. _PEP2:
 
@@ -113,15 +119,17 @@ Is this suitable for you?
 This workshop is for people that have some experience in Python already. We expect you to know the basic syntax of data types (dicts, lists etc.) and flow control (loops, conditionals). It's about making your Python programming *better*. For instance, we'll be picking up the basic version of an experiment (as taught in the Beginners workshop) and making it more precise.
 
 Schedule
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
-Some sessions will be self-paced (shown in green). We'll not start the first formal session until 10am on Day 1 (coffee available from 9am though) and we'll finish at 4pm on Day 3 to allow some travel flexibility. But you are welcome to hang around and continue working if you prefer.
+Details to follow but we'll be looking at:
 
-[All sessions subject to change]
+  - improving timing
+  - writing modular code (functions and classes)
+  - analysis methods
+  - specialist topics like eye-tracking (but limited without having eye-trackers present!)
+  - extending Builder with your own plug-in reusable components
 
-.. image:: ../images/scheduleIntermediate.png
-   :scale: 80 %
-
+Let Jon know if there are topics you'd like us to add here
 
 
 .. _Python: http://www.python.org/
