@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-'''Display a image on `psycopy.visual.Window`'''
+'''Display a dynamic image on `psycopy.visual.Window`'''
 
 # Part of the PsychoPy library
 # Copyright (C) 2015 Jonathan Peirce
@@ -26,7 +26,10 @@ from psychopy.visual.basevisual import BaseVisualStim
 from psychopy.visual.basevisual import (ContainerMixin, ColorMixin,
                                         TextureMixin)
 
-class ImageStim(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin):
+# TODO: impliment dynamic image stim using the same code (it works so why 
+# break anything?)
+
+class DynamicImageStim(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin):
     """Display an image on a :class:`psychopy.visual.Window`
     """
 
