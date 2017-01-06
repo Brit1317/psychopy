@@ -16,6 +16,8 @@ import ctypes
 GL = pyglet.gl
 
 import numpy
+import ctypes
+import os.path
 
 import psychopy  # so we can get the __path__
 from psychopy import logging
@@ -29,7 +31,81 @@ from psychopy.visual.basevisual import (ContainerMixin, ColorMixin,
 # TODO: impliment dynamic image stim using the same code (it works so why 
 # break anything?)
 
-class DynamicImageStim(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin):
+class Texture(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin):
+    """Create and manage textures in video memory to be displayed later.
+    """
+    def __init__(self, win, image=None, mask=None, texRes=128, maskParams=None):
+        # initialise textures for stimulus
+        self._texID = GL.GLuint()
+        GL.glGenTextures(1, ctypes.byref(self._texID))
+        self._maskID = GL.GLuint()
+        GL.glGenTextures(1, ctypes.byref(self._maskID))
+        self.__dict__['maskParams'] = maskParams
+        self.__dict__['mask'] = mask
+        # Not pretty (redefined later) but it works!
+        self.__dict__['texRes'] = texRes
+
+        # Other stuff
+        self._imName = image
+        self.isLumImage = None
+
+        self.texRes = texRes
+
+    @attributeSetter
+    def image(self, value):
+        """The image file to be presented (most formats supported).
+        """
+        self.__dict__['image'] = self._imName = value
+
+        wasLumImage = self.isLumImage
+        if value is None:
+            datatype = GL.GL_FLOAT
+        else:
+            datatype = GL.GL_UNSIGNED_BYTE
+        self.isLumImage = self._createTexture(value, id=self._texID,
+                                              stim=self,
+                                              pixFormat=GL.GL_RGB,
+                                              dataType=datatype,
+                                              maskParams=self.maskParams,
+                                              forcePOW2=False)
+        # if user requested size=None then update the size for new stim here
+        if hasattr(self, '_requestedSize') and self._requestedSize is None:
+            self.size = None  # set size to default
+        # if we switched to/from lum image then need to update shader rule
+        if wasLumImage != self.isLumImage:
+            self._needUpdate = True
+        self._needTextureUpdate = False
+
+    def setImage(self, value, log=None):
+        """Usually you can use 'stim.attribute = value' syntax instead,
+        but use this method if you need to suppress the log message.
+        """
+        setAttribute(self, 'image', value, log)
+
+    @attributeSetter
+    def mask(self, value):
+        """The alpha mask that can be used to control the outer
+        shape of the stimulus
+
+                + **None**, 'circle', 'gauss', 'raisedCos'
+                + or the name of an image file (most formats supported)
+                + or a numpy array (1xN or NxN) ranging -1:1
+        """
+        self.__dict__['mask'] = value
+        self._createTexture(value, id=self._maskID,
+                            pixFormat=GL.GL_ALPHA,
+                            dataType=GL.GL_UNSIGNED_BYTE,
+                            stim=self,
+                            res=self.texRes,
+                            maskParams=self.maskParams)
+
+    def setMask(self, value, log=None):
+        """Usually you can use 'stim.attribute = value' syntax instead,
+        but use this method if you need to suppress the log message.
+        """
+        setAttribute(self, 'mask', value, log)
+
+class ImageStim2(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin):
     """Display an image on a :class:`psychopy.visual.Window`
     """
 
@@ -234,6 +310,11 @@ class DynamicImageStim(BaseVisualStim, ContainerMixin, ColorMixin, TextureMixin)
         if hasattr(self, '_listID'):
             GL.glDeleteLists(self._listID, 1)
         self.clearTextures()
+    
+    def setTexture(self, texture):
+        # use a texture object
+        self._texID = texture.id
+        self._needUpdate = True
 
     def draw(self, win=None):
         """Draw.
