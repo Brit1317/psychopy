@@ -25,18 +25,18 @@ from . import globalVars
 reportNDroppedFrames = 5
 
 class Framebuffer(object):
-    """Class for generating and managing off-screen render target. 
+    """Class for generating and managing an soff-screen render target. 
     """
 
     def __init__(self, win, size=(800,600)):
-        """Framebuffer Objects provide a means of rendering stimuli off-screen
+        """Framebuffer Objects provide a means of rendering scenes off-screen
         to textures. These textures can be filtered by programmable GPU shaders 
-        or applied to quads for blitting and warping.
+        and/or applied to quads for blitting and warping.
 
         Framebuffers generated from this class have a single color and render 
         buffer by default. The color buffer has a single attachment at 
-        GL_COLOR_ATTACHMENT0_EXT with a GL_RGBA16 internal format. The texture
-        can be accessed by its handle 'textureId'.
+        GL_COLOR_ATTACHMENT0_EXT with a GL_RGBA16 internal colour format. The 
+        texture can be accessed by its handle 'textureId'.
         """
 
         # window pointer 
