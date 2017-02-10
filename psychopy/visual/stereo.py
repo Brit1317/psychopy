@@ -127,30 +127,30 @@ class Framebuffer(object):
         GL.glActiveTexture(where)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
         GL.glColorMask(True, True, True, True)
-    
+
     def unbind_texture(self, to_target=0):
-        GL.glBindTexture(GL.GL_TEXTURE_2D, toTarget)
-    
+        GL.glBindTexture(GL.GL_TEXTURE_2D, to_target)
+
     def bind_fbo(self, finalize=False):
         """Convienence function to bind FBO for read and draw"""
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glViewport(0, 0, self.fbo_size[0], self.fbo_size[1])
         self.win.size = self.fbo_size
-    
+
     def unbind_fbo(self, toTarget=0):
         """Unbind to default framebuffer to default (0)"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, toTarget)
-    
+
     def clear_buffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
         """Clear the specified FBO attachment/buffer"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glClear(buffer)
 
 class MultiRenderWindow(window.Window):
-
-    """Class for rendering stereoscopic scenes using multiple Framebuffers.
     
+    """Class for rendering stereoscopic scenes using multiple Framebuffers.
+
     Main support class for stereo modes that require off screen rendering for
     each eye's image; intended to provide alternative stereo display modes and
     stereo support for systems that do not support the GL_STEREO extension.
@@ -215,8 +215,8 @@ class MultiRenderWindow(window.Window):
         """
         if clearBuffer:
             # clear the framebuffer color buffers
-            self.rightFBO.clearBuffer()
-            self.leftFBO.clearBuffer()
+            self.rightFBO.clear_buffer()
+            self.leftFBO.clear_buffer()
 
     def _prepareFBOrender(self):
         """Bind and configure the stereo shader. This is overridden by shaders
@@ -448,10 +448,10 @@ class MultiRenderWindow(window.Window):
         if needed.
         """
         if buffer == 'left':
-            self.leftFBO.bindFBO()
+            self.leftFBO.bind_fbo()
 
         elif buffer == 'right':
-            self.rightFBO.bindFBO()
+            self.rightFBO.bind_fbo()
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -541,13 +541,13 @@ class PackedWindow(MultiRenderWindow):
             GL.glEnd()
 
     def _stereoRender(self):
-        self.leftFBO.bindTexture(GL.GL_TEXTURE0)
+        self.leftFBO.bind_texture(GL.GL_TEXTURE0)
         self._renderLeftFBO()
-        self.leftFBO.unbindTexture()
+        self.leftFBO.unbind_texture()
 
-        self.rightFBO.bindTexture(GL.GL_TEXTURE0)
+        self.rightFBO.bind_texture(GL.GL_TEXTURE0)
         self._renderRightFBO()
-        self.rightFBO.unbindTexture()
+        self.rightFBO.unbind_texture()
 
 class SpannedWindow(MultiRenderWindow):
 
@@ -603,7 +603,7 @@ class SpannedWindow(MultiRenderWindow):
 
     def _stereoRender(self):
         # blit left texture to the left side of screen
-        self.leftFBO.bindTexture(GL.GL_TEXTURE0)
+        self.leftFBO.bind_texture(GL.GL_TEXTURE0)
         # apply reflection if using a mirror stereoscope
         if self.reflected:
             GL.glMatrixMode(GL.GL_MODELVIEW)
@@ -616,9 +616,9 @@ class SpannedWindow(MultiRenderWindow):
         else:
             self._renderLeftFBO()
 
-        self.leftFBO.unbindTexture() # not needed here?
+        self.leftFBO.unbind_texture() # not needed here?
         # blit right texture to the right side of screen
-        self.rightFBO.bindTexture(GL.GL_TEXTURE0)
+        self.rightFBO.bind_texture(GL.GL_TEXTURE0)
         if self.reflected:
             GL.glMatrixMode(GL.GL_MODELVIEW)
             GL.glLoadIdentity()
@@ -630,7 +630,7 @@ class SpannedWindow(MultiRenderWindow):
         else:
             self._renderRightFBO()
         
-        self.rightFBO.unbindTexture()
+        self.rightFBO.unbind_texture()
 
 class AnaglyphWindow(MultiRenderWindow):
 
@@ -655,8 +655,8 @@ class AnaglyphWindow(MultiRenderWindow):
             "rightEyeTexture"), 2)
 
     def _stereoRender(self):
-        self.leftFBO.bindTexture(GL.GL_TEXTURE1)
-        self.rightFBO.bindTexture(GL.GL_TEXTURE2)
+        self.leftFBO.bind_texture(GL.GL_TEXTURE1)
+        self.rightFBO.bind_texture(GL.GL_TEXTURE2)
         self._renderFBO()
 
     def _compileStereoShader(self):
