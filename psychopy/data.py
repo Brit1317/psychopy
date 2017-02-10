@@ -1514,7 +1514,7 @@ class TrialHandler2(_BaseTrialHandler):
         self.name = name
         self.autoLog = autoLog
 
-        if trialList in [None, []]:  # user wants an empty trialList
+        if trialList in [None, [None], []]:  # user wants an empty trialList
             # which corresponds to a list with a single empty entry
             self.trialList = [None]
             self.columns = []
@@ -1661,7 +1661,7 @@ class TrialHandler2(_BaseTrialHandler):
             self.thisIndex = 0
             self.thisTrial = {}
         else:
-            self.thisIndex = self.remainingIndices.pop()
+            self.thisIndex = self.remainingIndices.pop(0)
             # if None then use empty dict
             thisTrial = self.trialList[self.thisIndex] or {}
             self.thisTrial = copy.copy(thisTrial)
@@ -3469,7 +3469,7 @@ class QuestHandler(StairHandler):
         # can now access 1 of 3 suggested threshold levels
         staircase.mean()
         staircase.mode()
-        staircase.quantile()  # gets the median
+        staircase.quantile(0.5)  # gets the median
 
     """
 
@@ -3701,10 +3701,22 @@ class QuestHandler(StairHandler):
     def quantile(self, p=None):
         """quantile of Quest posterior pdf
         """
-        return self._quest.quantile(p)
+        return self._quest.quantile(quantileOrder=p)
 
     def confInterval(self, getDifference=False):
-        """give the range of the 5-95% confidence interval
+        """
+        Return estimate for the 5%--95% confidence interval (CI).
+
+        :Parameters:
+
+            getDifference (bool)
+                If ``True``, return the width of the confidence interval
+                (95% - 5% percentiles). If ``False``, return an NumPy array
+                with estimates for the 5% and 95% boundaries.
+
+        :Returns:
+
+            scalar or array of length 2.
         """
         interval = [self.quantile(0.05), self.quantile(0.95)]
         if getDifference:
@@ -4435,7 +4447,6 @@ class MultiStairHandler(_BaseTrialHandler):
                 thisMatrixOnly = matrixOnly
             # make a filename
             label = thisStair.condition['label']
-            print("\n%s:" % label)
             thisStair.saveAsText(fileName='stdout', delim=delim,
                                  matrixOnly=thisMatrixOnly)
 
