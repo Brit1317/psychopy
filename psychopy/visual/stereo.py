@@ -21,50 +21,51 @@ from . import window
 from .. import platform_specific
 from .. import logging
 from . import globalVars
+from . import windowwarp
 
 reportNDroppedFrames = 5
 
 class Framebuffer(object):
-    """Class for generating and managing an soff-screen render target. 
+    """Class for generating and managing an off-screen render target.
     """
 
     def __init__(self, win, size=(800,600)):
         """Framebuffer Objects provide a means of rendering scenes off-screen
-        to textures. These textures can be filtered by programmable GPU shaders 
+        to textures. These textures can be filtered by programmable GPU shaders
         and/or applied to quads for blitting and warping.
 
-        Framebuffers generated from this class have a single color and render 
-        buffer by default. The color buffer has a single attachment at 
-        GL_COLOR_ATTACHMENT0_EXT with a GL_RGBA16 internal colour format. The 
+        Framebuffers generated from this class have a single color and render
+        buffer by default. The color buffer has a single attachment at
+        GL_COLOR_ATTACHMENT0_EXT with a GL_RGBA16 internal colour format. The
         texture can be accessed by its handle 'textureId'.
         """
 
-        # window pointer 
+        # window pointer
         self.win = win
         self.fbo_size = numpy.array(size, numpy.int)
 
         # create the framebuffer, must succeed or crash
-        self._initFramebuffer()
-    
+        self._init_framebuffer()
+
     def __repr__(self):
         """Return the framebuffer handle ID when called"""
         return self.frameBufferId
-    
+
     def __del__(self):
         """Delete the framebuffer and attached resources"""
-        # check if a color and render buffers have valid IDs (non-zero), if so, 
+        # check if a color and render buffers have valid IDs (non-zero), if so,
         # delete them
         if self.frameBufferId:
             GL.glDeleteTextures(1, ctypes.byref(self.textureId))
         if self.renderBufferId:
-            GL.glDeleteRenderbuffersEXT(1, ctypes.byref(self.renderBufferIdb))
-        
+            GL.glDeleteRenderbuffersEXT(1, ctypes.byref(self.renderBufferId))
+
         # discard the framebuffer to free up resources
-        GL.glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0)
+        GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
         GL.glDeleteFramebuffersEXT(1, ctypes.byref(self.frameBufferId))
-    
-    def _initFramebuffer(self):
-        """Setup frambuffer object for off-screen rendering. Setup is much like 
+
+    def _init_framebuffer(self):
+        """Setup frambuffer object for off-screen rendering. Setup is much like
         that in the window.Window class."""
 
         # get a new framebuffer reference handle
@@ -77,30 +78,33 @@ class Framebuffer(object):
         GL.glGenTextures(1, ctypes.byref(self.textureId))
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
         GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
-            GL.GL_LINEAR)
-        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, 
-            GL.GL_LINEAR)
-        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16, self.fbo_size[0], 
-            self.fbo_size[1], 0, GL.GL_RGBA, GL.GL_FLOAT, None)
-        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT, 
-            GL.GL_COLOR_ATTACHMENT0_EXT, GL.GL_TEXTURE_2D, self.textureId, 0)
-        
+                           GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
+                           GL.GL_LINEAR)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16, self.fbo_size[0],
+                        self.fbo_size[1], 0, GL.GL_RGBA, GL.GL_FLOAT, None)
+        GL.glFramebufferTexture2DEXT(GL.GL_FRAMEBUFFER_EXT,
+                                     GL.GL_COLOR_ATTACHMENT0_EXT,
+                                     GL.GL_TEXTURE_2D, self.textureId, 0)
+
         # clear the colour attachment
         GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-                            
+
         # create and attach a renderbuffer
         self.renderBufferId = GL.GLuint()
         GL.glGenRenderbuffersEXT(1, ctypes.byref(
             self.renderBufferId))
         GL.glBindRenderbufferEXT(GL.GL_RENDERBUFFER_EXT, self.renderBufferId)
-        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT, 
-            GL.GL_DEPTH24_STENCIL8_EXT, self.fbo_size[0], self.fbo_size[1])
-        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT, 
-            GL.GL_STENCIL_ATTACHMENT_EXT, GL.GL_RENDERBUFFER_EXT,
-            self.renderBufferId)
-        
+        GL.glRenderbufferStorageEXT(GL.GL_RENDERBUFFER_EXT,
+                                    GL.GL_DEPTH24_STENCIL8_EXT,
+                                    self.fbo_size[0], self.fbo_size[1])
+        GL.glFramebufferRenderbufferEXT(GL.GL_FRAMEBUFFER_EXT,
+                                        GL.GL_STENCIL_ATTACHMENT_EXT,
+                                        GL.GL_RENDERBUFFER_EXT,
+                                        self.renderBufferId)
+
         # clear depth and stencil buffer
         GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
         GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
@@ -118,27 +122,27 @@ class Framebuffer(object):
 
         GL.glDisable(GL.GL_TEXTURE_2D)
 
-    def bindTexture(self, where=GL.GL_TEXTURE0):
+    def bind_texture(self, where=GL.GL_TEXTURE0):
         """Bind the FBO texture to a given texture unit"""
         GL.glActiveTexture(where)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.textureId)
         GL.glColorMask(True, True, True, True)
     
-    def unbindTexture(self, toTarget=0):
+    def unbind_texture(self, to_target=0):
         GL.glBindTexture(GL.GL_TEXTURE_2D, toTarget)
     
-    def bindFBO(self, finalize=False):
+    def bind_fbo(self, finalize=False):
         """Convienence function to bind FBO for read and draw"""
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glViewport(0, 0, self.fbo_size[0], self.fbo_size[1])
         self.win.size = self.fbo_size
     
-    def unbindFBO(self, toTarget=0):
+    def unbind_fbo(self, toTarget=0):
         """Unbind to default framebuffer to default (0)"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, toTarget)
     
-    def clearBuffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
+    def clear_buffer(self, buffer=GL.GL_COLOR_BUFFER_BIT):
         """Clear the specified FBO attachment/buffer"""
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glClear(buffer)
