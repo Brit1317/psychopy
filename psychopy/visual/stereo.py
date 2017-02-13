@@ -15,6 +15,7 @@ import numpy
 import pyglet
 pyglet.options['debug_gl'] = False
 GL = pyglet.gl
+GLU = pyglet.gl.glu
 
 # PsychoPy imports
 from . import shaders as _shaders
@@ -118,7 +119,7 @@ class Framebuffer(object):
         GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
         # set the default projection
-        self.reset_projection()
+        self.set_default_projection()
 
         # check if the framebuffer has been successfully initalized
         status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
@@ -173,11 +174,11 @@ class Framebuffer(object):
             GL.glMatrixMode(GL.GL_PROJECTION)
             GL.glLoadIdentity()
             GL.glFrustum(frust_left,
-                          frust_right,
-                          frust_bottom,
-                          frust_top,
-                          clip[0],
-                          clip[1])
+                         frust_right,
+                         frust_bottom,
+                         frust_top,
+                         clip[0],
+                         clip[1])
             GL.glTranslatef(view_shift, 0.0, 0.0)
             
             # move camera away from the screen plane
@@ -523,11 +524,11 @@ class MultiRenderWindow(window.Window):
         """
         if buffer == 'left':
             self.leftFBO.bind_fbo()
-            self.leftFBO.set_stereo_projection(eye_view='right')
+            #self.leftFBO.set_stereo_projection(eye_view='left')
 
         elif buffer == 'right':
             self.rightFBO.bind_fbo()
-            self.leftFBO.set_stereo_projection(eye_view='right')
+            #self.rightFBO.set_stereo_projection(eye_view='right')
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)

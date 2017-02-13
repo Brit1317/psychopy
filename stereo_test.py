@@ -15,15 +15,15 @@ n = 0
 while n < 1200:
     win.setBuffer('left')
     msg.text="Test"
-    msg.pos=(0.01,0)
+    msg.pos=(0,0)
     msg.draw()
     l.end = (0.5,0.5)
     l.draw()
     win.setBuffer('right')
     msg.text="Test"
-    msg.pos=(-0.01,0)
+    msg.pos=(0,0)
     msg.draw()
-    l.end = (0.51,0.5)
+    l.end = (0.5,0.5)
     l.draw()
 
     win.flip()
