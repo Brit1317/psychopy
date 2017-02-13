@@ -8,6 +8,7 @@ code modified from visual.Window by PsychoPy contributers.
 # python stdlibs
 import ctypes
 import sys
+import math
 
 # third-party libs
 import numpy
@@ -47,6 +48,8 @@ class Framebuffer(object):
 
         # create the framebuffer, must succeed or crash
         self._init_framebuffer()
+
+        # flag to indicate that drawing is in stereo
 
     def __repr__(self):
         """Return the framebuffer handle ID when called"""
@@ -130,14 +133,61 @@ class Framebuffer(object):
 
         GL.glDisable(GL.GL_TEXTURE_2D)
     
-    def reset_projection(self):
+    def set_default_projection(self):
         """Set projection to defualt that stimuli classes expect"""
+        # NB - this should be in the window class?
         GL.glViewport(0, 0, int(self.fbo_size[0]), int(self.fbo_size[1]))
         GL.glMatrixMode(GL.GL_PROJECTION)
         GL.glLoadIdentity()
         GL.gluOrtho2D(-1, 1, -1, 1)
         GL.glMatrixMode(GL.GL_MODELVIEW)
         GL.glLoadIdentity()
+    
+    def set_stereo_projection(self, eye_view='left', eye_sep=0.060, converge_dist=1.0, 
+                              fovy=90.0, mode='offaxis', clip=(0.5, 50.0)):
+        """Set the camera settings for a stereo projection. One FBO is used per view (eye image),
+        adapted from http://www.orthostereo.com/geometryopengl.html for now"""
+        # NB - this should be in the window class?
+        # must be bound to the current FBO
+        aspect_ratio = float(self.fbo_size[0]) / float(self.fbo_size[1])
+
+        # convert FOV to radians
+        fovy = fovy * (180 / math.pi)
+
+        top = clip[0] * math.tan(fovy / 2.0)
+        right = aspect_ratio * top
+        offset = (clip[0] / float(converge_dist)) * (eye_sep / 2.0)
+
+        frust_top = top
+        frust_bottom = -top
+        frust_left = -right - offset
+        frust_right = right - offset
+
+        if eye_view == 'left':
+            view_shift = eye_sep / 2.0
+        elif eye_view == 'right':
+            view_shift = -eye_sep / 2.0
+
+        # calculate the camera settings and set them for each mode
+        if mode == 'offaxis' or mode == 'asymm':
+            GL.glMatrixMode(GL.GL_PROJECTION)
+            GL.glLoadIdentity()
+            GL.glFrustum(frust_left,
+                          frust_right,
+                          frust_bottom,
+                          frust_top,
+                          clip[0],
+                          clip[1])
+            GL.glTranslatef(view_shift, 0.0, 0.0)
+            
+            # move camera away from the screen plane
+            GL.glTranslatef(0.0, 0.0, -converge_dist)
+
+            GL.glMatrixMode(GL.GL_MODELVIEW)
+            GL.glLoadIdentity()
+        
+        else:
+            pass
 
     def bind_texture(self, where=GL.GL_TEXTURE0):
         """Bind the FBO texture to a given texture unit"""
@@ -149,7 +199,7 @@ class Framebuffer(object):
         """Unbind the framebuffer's texture"""
         GL.glBindTexture(GL.GL_TEXTURE_2D, to_target)
 
-    def bind_fbo(self, finalize=False):
+    def bind_fbo(self):
         """Convienence function to bind FBO for read and draw"""
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
@@ -473,9 +523,11 @@ class MultiRenderWindow(window.Window):
         """
         if buffer == 'left':
             self.leftFBO.bind_fbo()
+            self.leftFBO.set_stereo_projection(eye_view='right')
 
         elif buffer == 'right':
             self.rightFBO.bind_fbo()
+            self.leftFBO.set_stereo_projection(eye_view='right')
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
