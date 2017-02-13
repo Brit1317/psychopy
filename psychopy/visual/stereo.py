@@ -29,7 +29,7 @@ class Framebuffer(object):
     """Class for generating and managing an off-screen render target.
     """
 
-    def __init__(self, win, size=(800,600)):
+    def __init__(self, win, size=(800,600), bg_color=(0,0,0)):
         """Framebuffer Objects provide a means of rendering scenes off-screen
         to textures. These textures can be filtered by programmable GPU shaders
         and/or applied to quads for blitting and warping.
@@ -42,6 +42,7 @@ class Framebuffer(object):
 
         # window pointer
         self.win = win
+        self.bg_color = bg_color
         self.fbo_size = numpy.array(size, numpy.int)
 
         # create the framebuffer, must succeed or crash
@@ -88,6 +89,10 @@ class Framebuffer(object):
                                      GL.GL_TEXTURE_2D, self.textureId, 0)
 
         # clear the colour attachment
+        GL.glClearColor(self.bg_color[0],
+                        self.bg_color[1],
+                        self.bg_color[2],
+                        0.0)
         GL.glReadBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glDrawBuffer(GL.GL_COLOR_ATTACHMENT0_EXT)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -109,18 +114,30 @@ class Framebuffer(object):
         GL.glClear(GL.GL_STENCIL_BUFFER_BIT)
         GL.glClear(GL.GL_DEPTH_BUFFER_BIT)
 
+        # set the default projection
+        self.reset_projection()
+
         # check if the framebuffer has been successfully initalized
         status = GL.glCheckFramebufferStatusEXT(GL.GL_FRAMEBUFFER_EXT)
         if status != GL.GL_FRAMEBUFFER_COMPLETE_EXT:
             logging.error("Error in framebuffer activation")
             GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, 0)
-
-            # should hard crash here, you can't do anything with stereo
-            # if this fails
+            print("FATAL: Framebuffer failed to initialize, your hardware" \
+                  " or drivers may not support this feature.")
+            #sys.exit(1) # exit more nicely than this
 
             return None
 
         GL.glDisable(GL.GL_TEXTURE_2D)
+    
+    def reset_projection(self):
+        """Set projection to defualt that stimuli classes expect"""
+        GL.glViewport(0, 0, int(self.fbo_size[0]), int(self.fbo_size[1]))
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glLoadIdentity()
+        GL.gluOrtho2D(-1, 1, -1, 1)
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
 
     def bind_texture(self, where=GL.GL_TEXTURE0):
         """Bind the FBO texture to a given texture unit"""
@@ -129,6 +146,7 @@ class Framebuffer(object):
         GL.glColorMask(True, True, True, True)
 
     def unbind_texture(self, to_target=0):
+        """Unbind the framebuffer's texture"""
         GL.glBindTexture(GL.GL_TEXTURE_2D, to_target)
 
     def bind_fbo(self, finalize=False):
@@ -136,7 +154,9 @@ class Framebuffer(object):
         # only simple texture being used
         GL.glBindFramebufferEXT(GL.GL_FRAMEBUFFER_EXT, self.frameBufferId)
         GL.glViewport(0, 0, self.fbo_size[0], self.fbo_size[1])
-        self.win.size = self.fbo_size
+        # force the main window to report the FBO size, very hacky 
+        # but needed for stimuli to draw correctly.
+        self.win.size = self.fbo_size 
 
     def unbind_fbo(self, toTarget=0):
         """Unbind to default framebuffer to default (0)"""
@@ -148,7 +168,7 @@ class Framebuffer(object):
         GL.glClear(buffer)
 
 class MultiRenderWindow(window.Window):
-    
+
     """Class for rendering stereoscopic scenes using multiple Framebuffers.
 
     Main support class for stereo modes that require off screen rendering for
@@ -161,7 +181,7 @@ class MultiRenderWindow(window.Window):
     default visual.Window class.
 
     Usage:
-        
+
         You can set which eye is the render target by calling the setBuffer()
         method and specifying either 'left' or 'right'. Subsiquent draw
         commands will be rendered to that eye. This behaviour is consistent
@@ -208,6 +228,10 @@ class MultiRenderWindow(window.Window):
         
         # init window class
         super(MultiRenderWindow, self).__init__(*args, **kwargs)
+
+        # a list of view buffers attached to this window, the stereo display type
+        # determines what this contains
+        self._view_buffers = list()
 
     def _endOfFlip(self, clearBuffer):
         """
