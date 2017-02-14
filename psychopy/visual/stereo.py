@@ -144,8 +144,8 @@ class Framebuffer(object):
         GL.glMatrixMode(GL.GL_MODELVIEW)
         GL.glLoadIdentity()
     
-    def set_stereo_projection(self, eye_view='left', eye_sep=0.060, converge_dist=1.0, 
-                              fovy=90.0, mode='offaxis', clip=(0.5, 50.0)):
+    def set_stereo_projection(self, eye_view='left', eye_sep=0.06, converge_dist=1.0, 
+                              fovy=110.0, mode='offaxis', clip=(0.5, 50.0)):
         """Set the camera settings for a stereo projection. One FBO is used per view (eye image),
         adapted from http://www.orthostereo.com/geometryopengl.html for now"""
         # NB - this should be in the window class?
@@ -153,7 +153,7 @@ class Framebuffer(object):
         aspect_ratio = float(self.fbo_size[0]) / float(self.fbo_size[1])
 
         # convert FOV to radians
-        fovy = fovy * (180 / math.pi)
+        fovy = fovy * (math.pi / 180.0)
 
         top = clip[0] * math.tan(fovy / 2.0)
         right = aspect_ratio * top
@@ -161,12 +161,14 @@ class Framebuffer(object):
 
         frust_top = top
         frust_bottom = -top
-        frust_left = -right - offset
-        frust_right = right - offset
 
         if eye_view == 'left':
+            frust_left = -right + offset
+            frust_right = right + offset
             view_shift = eye_sep / 2.0
         elif eye_view == 'right':
+            frust_left = -right - offset
+            frust_right = right - offset
             view_shift = -eye_sep / 2.0
 
         # calculate the camera settings and set them for each mode
@@ -524,11 +526,11 @@ class MultiRenderWindow(window.Window):
         """
         if buffer == 'left':
             self.leftFBO.bind_fbo()
-            #self.leftFBO.set_stereo_projection(eye_view='left')
+            self.leftFBO.set_stereo_projection(eye_view='left')
 
         elif buffer == 'right':
             self.rightFBO.bind_fbo()
-            #self.rightFBO.set_stereo_projection(eye_view='right')
+            self.rightFBO.set_stereo_projection(eye_view='right')
 
         if clear:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
